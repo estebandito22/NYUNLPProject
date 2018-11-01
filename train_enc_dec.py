@@ -40,7 +40,7 @@ save_dir = os.path.join(os.getcwd(), 'outputs')
 
 encdec = EncDec(word_embdim=10, word_embeddings=None, vocab_size=50000,
                 enc_hidden_dim=10, dec_hidden_dim=10, enc_dropout=0,
-                dec_dropout=0, num_layers=1, attention=False, batch_size=4,
+                dec_dropout=0, num_layers=1, attention=True, batch_size=4,
                 lr=0.01)
 
 encdec.fit(train_dataset, val_dataset, save_dir)

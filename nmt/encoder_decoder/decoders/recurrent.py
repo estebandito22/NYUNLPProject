@@ -5,8 +5,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-# from nmt.encoder_decoder.decoders.attention import AttentionMechanism
-from nmt.encoder_decoder.decoders.attentiondot import AttentionMechanism
+from nmt.encoder_decoder.decoders.attention import AttentionMechanism
 
 
 class RecurrentDecoder(nn.Module):
@@ -41,8 +40,7 @@ class RecurrentDecoder(nn.Module):
 
             dict_args = {'context_size': self.max_sent_len,
                          'context_dim': self.enc_hidden_dim * 2,
-                         'hidden_size': self.hidden_size,
-                         'word_embdim': self.word_embdim}
+                         'hidden_size': self.hidden_size}
             self.attn_layer = AttentionMechanism(dict_args)
 
             self.init_hidden = nn.Linear(
@@ -71,8 +69,7 @@ class RecurrentDecoder(nn.Module):
             # batch_size x enc_hidden_dim x seqlen
             seq_enc_states = seq_enc_states.permute(1, 2, 0)
             # batch_size x enc_hidden_dim
-            context = self.attn_layer(
-                seq_word_embds, self.hidden, seq_enc_states)
+            context = self.attn_layer(seqlen, self.hidden, seq_enc_states)
         else:
             context = seq_enc_states.expand(seqlen, -1, -1)
 

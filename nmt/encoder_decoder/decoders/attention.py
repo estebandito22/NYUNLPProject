@@ -24,33 +24,31 @@ class AttentionMechanism(nn.Module):
         self.context_size = dict_args['context_size']
         self.context_dim = dict_args['context_dim']
         self.hidden_size = dict_args['hidden_size']
-        self.word_embdim = dict_args['word_embdim']
 
-        self.attn = nn.Linear(
-            self.hidden_size + self.word_embdim, self.context_size)
+        self.attn = nn.Linear(self.context_dim, self.hidden_size)
 
-    def forward(self, seq_word_embds, hidden, contextvects):
+    def forward(self, seqlen, hidden, contextvects):
         """Forward pass."""
         # contextvects: batch_size x context_dim x context_size
-        # seq_word_embds: seqlen x batch_size x word_embdim
-        seqlen, batch_size, _ = seq_word_embds.size()
-        # seqlen x batch_size x word_embdim + hidden_size
-        attn_input = torch.cat(
-            [seq_word_embds, hidden.expand(seqlen, -1, -1)], dim=2)
+        # hidden: 1 x batch_size x hidden_size
         # init context
         context = torch.zeros(
-            [seqlen, batch_size, self.context_dim])
+            [seqlen, hidden.size(1), self.context_dim])
         if torch.cuda.is_available():
             context = context.cuda()
         # create directed graph for attention at each time step
         for i in range(seqlen):
-            # batch_size x word_embdim + hidden_size
-            # -> batch_size x context_size
-            attn_weights = F.softmax(self.attn(attn_input[i]), dim=1)
+            # batch_size x context_size x hidden_size
+            context_proj = self.attn(contextvects.permute(0, 2, 1))
+            # multiplies by batch,
+            # (context_size x hidden_size) mv (hidden_size x 1)
+            # -> batch_size x context_size x 1
+            attn_weights = F.softmax(torch.matmul(
+                context_proj, hidden.permute(1, 2, 0)), dim=1)
             # mutiplies by batch,
-            # (context_dim x context_size) mm (context_size x 1)
-            # giving (context_dim, )
+            # (context_dim x context_size) mv (context_size x 1)
+            # -> batch_size x context_dim
             context[i] = torch.matmul(
-                contextvects, attn_weights.unsqueeze(2)).squeeze()
+                contextvects, attn_weights).squeeze()
 
         return context
