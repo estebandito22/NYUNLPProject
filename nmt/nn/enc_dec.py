@@ -172,8 +172,9 @@ class EncDec(Trainer):
         Train the NN model.
 
         Args
-            metadata_csv: path to the metadata_csv file.
-            save_dir: directory to save nn_model
+            train_dataset: PyTorch Dataset object.
+            val_dataset: PyTorch Dataset object.
+            save_dir: directory to save model.
         """
         # Print settings to output file
         print("Word Embedding Dim {}\n\
@@ -188,10 +189,11 @@ class EncDec(Trainer):
                Batch Size {}\n\
                Learning Rate {}\n\
                Save Dir: {}".format(
-                   self.word_embdim, self.word_embeddings, self.vocab_size,
-                   self.enc_hidden_dim, self.dec_hidden_dim, self.enc_dropout,
-                   self.dec_dropout, self.num_layers, self.attention,
-                   self.batch_size, self.lr, save_dir))
+                   self.word_embdim, bool(self.word_embeddings),
+                   self.vocab_size, self.enc_hidden_dim, self.dec_hidden_dim,
+                   self.enc_dropout, self.dec_dropout, self.num_layers,
+                   self.attention, self.batch_size, self.lr, save_dir),
+              flush=True)
 
         self.model_dir = save_dir
         self.train_data = train_dataset
@@ -216,18 +218,19 @@ class EncDec(Trainer):
         for epoch in range(self.num_epochs + 1):
             self.nn_epoch = epoch
             if epoch > 0:
-                print("Initializing train epoch...")
+                print("Initializing train epoch...", flush=True)
                 sp, train_loss = self._train_epoch(train_loader)
                 samples_processed += sp
 
                 # report
                 print("Epoch: [{}/{}]\tSamples: [{}/{}]\tTrain Loss:{}".format(
                     epoch, self.num_epochs, samples_processed,
-                    len(self.train_data)*self.num_epochs, train_loss))
+                    len(self.train_data)*self.num_epochs, train_loss),
+                      flush=True)
 
             if epoch % 1 == 0:
                 # compute loss
-                print("Initializing val epoch...")
+                print("Initializing val epoch...", flush=True)
                 _, val_loss = self._eval_epoch(val_loader)
 
                 self.val_losses += [val_loss]
@@ -251,7 +254,7 @@ class EncDec(Trainer):
                 {}\tValidation Loss: {}".format(
                     epoch, self.num_epochs, samples_processed,
                     len(self.train_data)*self.num_epochs, train_loss,
-                    val_loss))
+                    val_loss), flush=True)
 
     def predict(self, loader):
         """Predict input."""
@@ -305,12 +308,11 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_vs_{}_ehd_{}_dhd_{}_ed_{}_dd_{}\
-            _nl_{}_at_{}_lr_{}".\
-                format(self.word_embdim, self.word_embeddings, self.vocab_size,
-                       self.enc_hiddem_dim, self.dec_hidden_dim,
-                       self.enc_dropout, self.dec_dropout, self.num_layers,
-                       self.attention, self.lr)
+            model_dir = "ENCDEC_wed_{}_we_{}_vs_{}_ehd_{}_dhd_{}_ed_{}_dd_{}_nl_{}_at_{}_lr_{}".\
+                format(self.word_embdim, bool(self.word_embeddings),
+                       self.vocab_size, self.enc_hiddem_dim,
+                       self.dec_hidden_dim, self.enc_dropout, self.dec_dropout,
+                       self.num_layers, self.attention, self.lr)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
                 os.makedirs(os.path.join(models_dir, model_dir))

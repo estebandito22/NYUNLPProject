@@ -58,23 +58,34 @@ class InputBuilder(object):
 
         return token2id, id2token
 
-    def fit_transform(self, samples):
+    def fit_transform(self, samples, pre_tokenized=False):
         """Transform raw text samles to tokens."""
         token_dataset = []
         index_dataset = []
         all_tokens = []
         max_sent_len = 0
 
-        for tokens in tqdm(
-                self.tokenizer.pipe(samples,
-                                    batch_size=512, n_threads=1)):
-            tokens = self._lower_case_remove_punc(tokens)
-            tokens = ['<bos>'] + tokens + ['<eos>']
-            token_dataset.append(tokens)
-            all_tokens += tokens
+        if pre_tokenized:
+            for sample in tqdm(samples):
+                tokens = sample.split(' ')
+                tokens = tokens = ['<bos>'] + tokens + ['<eos>']
+                token_dataset.append(tokens)
+                all_tokens += tokens
 
-            if len(tokens) > max_sent_len:
-                max_sent_len = len(tokens)
+                if len(tokens) > max_sent_len:
+                    max_sent_len = len(tokens)
+
+        else:
+            for tokens in tqdm(
+                    self.tokenizer.pipe(samples,
+                                        batch_size=512, n_threads=1)):
+                tokens = self._lower_case_remove_punc(tokens)
+                tokens = ['<bos>'] + tokens + ['<eos>']
+                token_dataset.append(tokens)
+                all_tokens += tokens
+
+                if len(tokens) > max_sent_len:
+                    max_sent_len = len(tokens)
 
         self.token2id, self.id2token = self._build_vocab(all_tokens)
 
@@ -84,21 +95,31 @@ class InputBuilder(object):
 
         return index_dataset, self.token2id, self.id2token, max_sent_len
 
-    def transform(self, samples):
+    def transform(self, samples, pre_tokenized=False):
         """Transform raw text samles to tokens."""
         token_dataset = []
         index_dataset = []
         max_sent_len = 0
 
-        for tokens in tqdm(
-                self.tokenizer.pipe(samples,
-                                    batch_size=512, n_threads=1)):
-            tokens = self._lower_case_remove_punc(tokens)
-            tokens = ['<bos>'] + tokens + ['<eos>']
-            token_dataset.append(tokens)
+        if pre_tokenized:
+            for sample in tqdm(samples):
+                tokens = sample.split(' ')
+                tokens = tokens = ['<bos>'] + tokens + ['<eos>']
+                token_dataset.append(tokens)
 
-            if len(tokens) > max_sent_len:
-                max_sent_len = len(tokens)
+                if len(tokens) > max_sent_len:
+                    max_sent_len = len(tokens)
+
+        else:
+            for tokens in tqdm(
+                    self.tokenizer.pipe(samples,
+                                        batch_size=512, n_threads=1)):
+                tokens = self._lower_case_remove_punc(tokens)
+                tokens = ['<bos>'] + tokens + ['<eos>']
+                token_dataset.append(tokens)
+
+                if len(tokens) > max_sent_len:
+                    max_sent_len = len(tokens)
 
         for tokens in token_dataset:
             index_dataset += [[self.token2id[token] if token in self.token2id
