@@ -35,12 +35,13 @@ def main(word_embdim, vocab_size, enc_hidden_dim,
             name = file.split('/')[-1]
             data[name] = r
 
-    max_sent_len = max(data['max_sent_len.en'], data['max_sent_len.'+source_lang])
+    max_sent_len = max(
+        data['max_sent_len.en'], data['max_sent_len.'+source_lang])
 
     train_dataset = NMTDataset(
-        data['train.vi'][:40], data['train.en'][:40], max_sent_len)
+        data['train.vi'], data['train.en'], max_sent_len)
     val_dataset = NMTDataset(
-        data['dev.'+source_lang][:10], data['dev.'+source_lang][:10], max_sent_len)
+        data['dev.'+source_lang], data['dev.'+source_lang], max_sent_len)
 
     save_dir = os.path.join(os.getcwd(), 'outputs')
 
