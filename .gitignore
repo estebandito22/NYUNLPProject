@@ -119,7 +119,5 @@ Thumbs.db
 # Project
 inputs/*.en
 inputs/*.vi
-inputs/iwslt*
 data/*.en
 data/*.vi
-data/iwslt*
