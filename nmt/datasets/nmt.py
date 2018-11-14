@@ -21,6 +21,18 @@ class NMTDataset(Dataset):
         self.y = y
         self.max_sent_len = max_sent_len
 
+    def randomize_samples(self, k=10):
+        """Return index batches of inputs."""
+        indexes = [x for x in range(len(self))]
+        np.random.shuffle(indexes)
+        s = 0
+        size = int(np.ceil(len(indexes) / k))
+        batches = []
+        while s < len(indexes):
+            batches += [indexes[s:s + size]]
+            s = s + size
+        return batches
+
     def __len__(self):
         """Return length of dataset."""
         return len(self.X)

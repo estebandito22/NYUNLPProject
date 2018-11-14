@@ -1,11 +1,13 @@
 """Class to train encoder decoder neural machine translation network."""
 
 import os
+import multiprocessing
 
 import torch
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
+from torch.utils.data.dataset import Subset
 
 from tqdm import tqdm
 
@@ -17,10 +19,10 @@ class EncDec(Trainer):
 
     """Class to train EncDecNMT network."""
 
-    def __init__(self, word_embdim=300, word_embeddings=None, vocab_size=50000,
-                 enc_hidden_dim=256, dec_hidden_dim=256, enc_dropout=0,
-                 dec_dropout=0, num_layers=1, attention=False, batch_size=64,
-                 lr=0.01, num_epochs=100):
+    def __init__(self, word_embdim=300, word_embeddings=None,
+                 vocab_size=50000, enc_hidden_dim=256, dec_hidden_dim=256,
+                 enc_dropout=0, dec_dropout=0, num_layers=1, attention=False,
+                 batch_size=64, lr=0.01, weight_decay=0.0, num_epochs=100):
         """Initialize EncDec."""
         Trainer.__init__(self)
         self.word_embdim = word_embdim
@@ -35,6 +37,7 @@ class EncDec(Trainer):
         self.num_layers = num_layers
         self.batch_size = batch_size
         self.lr = lr
+        self.weight_decay = weight_decay
         self.num_epochs = num_epochs
         self.max_sent_len = None
 
@@ -49,16 +52,16 @@ class EncDec(Trainer):
         self.optimizer = None
         self.loss_func = None
         self.dict_args = None
-        self.nn_epoch = None
+        self.nn_epoch = 0
 
         # Save load attributes
         self.save_dir = None
         self.model_dir = None
 
         # Performance attributes
-        self.best_score = 0
+        # self.best_score = 0
         self.best_loss = float('inf')
-        self.best_score_train = 0
+        # self.best_score_train = 0
         self.best_loss_train = float('inf')
         self.val_losses = []
         self.train_losses = []
@@ -84,7 +87,8 @@ class EncDec(Trainer):
         self.model = EncDecNMT(self.dict_args)
 
         self.loss_func = nn.NLLLoss()
-        self.optimizer = optim.Adam(self.model.parameters(), self.lr)
+        self.optimizer = optim.Adam(self.model.parameters(), self.lr,
+                                    weight_decay=self.weight_decay)
 
         if self.USE_CUDA:
             self.model = self.model.cuda()
@@ -188,11 +192,13 @@ class EncDec(Trainer):
                Attention {}\n\
                Batch Size {}\n\
                Learning Rate {}\n\
+               Weight Decay {}\n\
                Save Dir: {}".format(
                    self.word_embdim, bool(self.word_embeddings),
                    self.vocab_size, self.enc_hidden_dim, self.dec_hidden_dim,
                    self.enc_dropout, self.dec_dropout, self.num_layers,
-                   self.attention, self.batch_size, self.lr, save_dir),
+                   self.attention, self.batch_size, self.lr, self.weight_decay,
+                   save_dir),
               flush=True)
 
         self.model_dir = save_dir
@@ -215,46 +221,55 @@ class EncDec(Trainer):
         samples_processed = 0
 
         # train loop
-        for epoch in range(self.num_epochs + 1):
-            self.nn_epoch = epoch
-            if epoch > 0:
-                print("Initializing train epoch...", flush=True)
-                sp, train_loss = self._train_epoch(train_loader)
-                samples_processed += sp
+        k = 10
+        while self.nn_epoch < self.num_epochs - (k - 1):
 
-                # report
-                print("Epoch: [{}/{}]\tSamples: [{}/{}]\tTrain Loss:{}".format(
-                    epoch, self.num_epochs, samples_processed,
-                    len(self.train_data)*self.num_epochs, train_loss),
-                      flush=True)
+            train_loaders = self._batch_loaders(self.train_data, k=k)
+            val_loaders = [val_loader] * len(train_loaders)
 
-            if epoch % 1 == 0:
-                # compute loss
-                print("Initializing val epoch...", flush=True)
-                _, val_loss = self._eval_epoch(val_loader)
+            loaders = zip(train_loaders, val_loaders)
+            for train_loader, val_loader in loaders:
 
-                self.val_losses += [val_loss]
-                # val_score = self.score(val_loader)
-                val_score = 0
+                if self.nn_epoch > 0:
+                    print("Initializing train epoch...", flush=True)
+                    sp, train_loss = self._train_epoch(train_loader)
+                    samples_processed += sp
 
-                if val_score > self.best_score:
-                    self.best_score = val_score
-                    self.best_loss = val_loss
+                    # report
+                    print("Epoch: [{}/{}]\tSamples: [{}/{}]\tTrain Loss:{}".
+                          format(self.nn_epoch, self.num_epochs,
+                                 samples_processed,
+                                 len(self.train_data)*self.num_epochs,
+                                 train_loss), flush=True)
 
-                    train_score = self.score(train_loader)
-                    self.best_score_train = train_score
-                    self.best_loss_train = train_loss
+                if self.nn_epoch % 1 == 0:
+                    # compute loss
+                    print("Initializing val epoch...", flush=True)
+                    _, val_loss = self._eval_epoch(val_loader)
 
-                    self.save(save_dir)
-                else:
-                    train_score = None
+                    self.val_losses += [val_loss]
+                    # val_score = self.score(val_loader)
 
-                # report
-                print("Epoch: [{}/{}]\tSamples: [{}/{}]\tTrain Loss: \
-                {}\tValidation Loss: {}".format(
-                    epoch, self.num_epochs, samples_processed,
-                    len(self.train_data)*self.num_epochs, train_loss,
-                    val_loss), flush=True)
+                    if val_loss < self.best_loss:
+                        # self.best_score = val_score
+                        self.best_loss = val_loss
+
+                        # train_score = self.score(train_loader)
+                        # self.best_score_train = train_score
+                        self.best_loss_train = train_loss
+
+                        self.save(save_dir)
+                    # else:
+                    #     train_score = None
+
+                    # report
+                    print("Epoch: [{}/{}]\tSamples: [{}/{}]\tTrain Loss: {}\tValidation Loss: {}".
+                          format(self.nn_epoch, self.num_epochs,
+                                 samples_processed,
+                                 len(self.train_data)*self.num_epochs,
+                                 train_loss, val_loss), flush=True)
+
+                self.nn_epoch += 1
 
     def predict(self, loader):
         """Predict input."""
@@ -299,6 +314,17 @@ class EncDec(Trainer):
 
         return score
 
+    def _batch_loaders(self, dataset, k=None):
+        batches = dataset.randomize_samples(k)
+        loaders = []
+        for subset_batch_indexes in batches:
+            subset = Subset(dataset, subset_batch_indexes)
+            loader = DataLoader(
+                subset, batch_size=self.batch_size, shuffle=True,
+                num_workers=multiprocessing.cpu_count())
+            loaders += [loader]
+        return loaders
+
     def save(self, models_dir=None):
         """
         Save model.
@@ -308,11 +334,12 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_vs_{}_ehd_{}_dhd_{}_ed_{}_dd_{}_nl_{}_at_{}_lr_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_vs_{}_ehd_{}_dhd_{}_ed_{}_dd_{}_nl_{}_at_{}_lr_{}_wd_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
-                       self.vocab_size, self.enc_hiddem_dim,
+                       self.vocab_size, self.enc_hidden_dim,
                        self.dec_hidden_dim, self.enc_dropout, self.dec_dropout,
-                       self.num_layers, self.attention, self.lr)
+                       self.num_layers, self.attention, self.lr,
+                       self.weight_decay)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
                 os.makedirs(os.path.join(models_dir, model_dir))
