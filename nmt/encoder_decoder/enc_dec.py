@@ -32,14 +32,15 @@ class EncDecNMT(nn.Module):
         self.dec_hidden_dim = dict_args["dec_hidden_dim"]
         self.enc_dropout = dict_args["enc_dropout"]
         self.dec_dropout = dict_args["dec_dropout"]
-        self.vocab_size = dict_args["vocab_size"]
+        self.enc_vocab_size = dict_args["enc_vocab_size"]
+        self.dec_vocab_size = dict_args["dec_vocab_size"]
         self.batch_size = dict_args["batch_size"]
         self.attention = dict_args["attention"]
         self.num_layers = dict_args["num_layers"]
 
         # encoder
         dict_args = {'word_embdim': self.word_embdim,
-                     'vocab_size': self.vocab_size,
+                     'vocab_size': self.enc_vocab_size,
                      'hidden_size': self.enc_hidden_dim,
                      'num_layers': self.num_layers,
                      'dropout': self.enc_dropout,
@@ -54,7 +55,7 @@ class EncDecNMT(nn.Module):
         # decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
                      'word_embdim': self.word_embdim,
-                     'vocab_size': self.vocab_size,
+                     'vocab_size': self.dec_vocab_size,
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.dec_hidden_dim,
                      'dropout': self.dec_dropout,
@@ -64,11 +65,11 @@ class EncDecNMT(nn.Module):
 
         # word embd
         dict_args = {'word_embdim': self.word_embdim,
-                     'vocab_size': self.vocab_size}
+                     'vocab_size': self.enc_vocab_size}
         self.source_word_embd = WordEmbeddings(dict_args)
 
         dict_args = {'word_embdim': self.word_embdim,
-                     'vocab_size': self.vocab_size}
+                     'vocab_size': self.dec_vocab_size}
         self.target_word_embd = WordEmbeddings(dict_args)
 
     def forward(self, source_indexseq, s_lengths,
@@ -86,7 +87,7 @@ class EncDecNMT(nn.Module):
             # self.decoder = BeamSearchDecoder(dict_args)
             raise NotImplementedError("Beam Search Decoder not implemented!")
         else:
-            target_seq_word_embds = self.source_word_embd(target_indexseq)
+            target_seq_word_embds = self.target_word_embd(target_indexseq)
             log_probs = self.decoder(
                 target_seq_word_embds, t_lengths, source_seq_enc_states, z0)
 

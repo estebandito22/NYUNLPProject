@@ -8,11 +8,6 @@ from nmt.datasets.nmt import NMTDataset
 from nmt.nn.enc_dec import EncDec
 
 
-with open('/Users/stephencarrow/Documents/DS-GA 1011 Natural Language Processing and Representation/NYUNLPProject/inputs/iwslt-vi-en/token2id.vi', 'r') as f:
-    r = json.load(f)
-
-len(r)
-
 def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
          num_layers, attention, batch_size, lr, source_lang, num_epochs,
          save_dir):
@@ -48,19 +43,19 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
     max_sent_len = max(
         data['max_sent_len.en'], data['max_sent_len.'+source_lang])
 
-    enc_vocab_size = len(data['token2id.en'])
-    dec_vocab_size = len(data['token2id.'+source_lang])
-    vocab_size = max(enc_vocab_size, dec_vocab_size)
+    enc_vocab_size = len(data['token2id.'+source_lang])
+    dec_vocab_size = len(data['token2id.en'])
 
     train_dataset = NMTDataset(
-        data['train.vi'], data['train.en'], max_sent_len)
+        data['train.'+source_lang], data['train.en'], max_sent_len)
     val_dataset = NMTDataset(
-        data['dev.'+source_lang], data['dev.'+source_lang], max_sent_len)
+        data['dev.'+source_lang], data['dev.en'], max_sent_len)
 
     save_dir = os.path.join(os.getcwd(), 'outputs')
 
     encdec = EncDec(word_embdim=word_embdim, word_embeddings=None,
-                    vocab_size=vocab_size,
+                    enc_vocab_size=enc_vocab_size,
+                    dec_vocab_size=dec_vocab_size,
                     enc_hidden_dim=enc_hidden_dim,
                     dec_hidden_dim=dec_hidden_dim, enc_dropout=enc_dropout,
                     dec_dropout=dec_dropout, num_layers=num_layers,
@@ -110,3 +105,23 @@ if __name__ == '__main__':
          args["source_lang"],
          args["num_epochs"],
          args["save_dir"])
+
+
+
+inputs_dir = os.path.join(os.getcwd(), 'inputs')
+train_en = os.path.join(
+    inputs_dir, 'iwslt-'+source_lang+'-en', 'train.en')
+train_sl = os.path.join(
+    inputs_dir, 'iwslt-'+source_lang+'-en', 'train.'+source_lang)
+dev_en = os.path.join(
+    inputs_dir, 'iwslt-'+source_lang+'-en', 'dev.en')
+dev_sl = os.path.join(
+    inputs_dir, 'iwslt-'+source_lang+'-en', 'dev.'+source_lang)
+max_sent_en = os.path.join(
+    inputs_dir, 'iwslt-'+source_lang+'-en', 'max_sent_len.en')
+max_sent_sl = os.path.join(
+    inputs_dir, 'iwslt-'+source_lang+'-en', 'max_sent_len.'+source_lang)
+token2id_en = os.path.join(
+    inputs_dir, 'iwslt-'+source_lang+'-en', 'token2id.en')
+token2id_sl = os.path.join(
+    inputs_dir, 'iwslt-'+source_lang+'-en', 'token2id.vi')

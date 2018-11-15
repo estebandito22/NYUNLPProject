@@ -17,8 +17,8 @@ class NMTDataset(Dataset):
             X: list of index sequences from the first language.
             y: list of index sequences from the second language.
         """
-        self.X = X
-        self.y = y
+        self.X = {i: sent for i, sent in enumerate(X)}
+        self.y = {i: sent for i, sent in enumerate(y)}
         self.max_sent_len = max_sent_len
 
     def randomize_samples(self, k=10):

@@ -46,14 +46,13 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
     max_sent_len = max(
         data['max_sent_len.en'], data['max_sent_len.'+source_lang])
 
-    enc_vocab_size = len(data['token2id.en'])
-    dec_vocab_size = len(data['token2id.'+source_lang])
-    vocab_size = max(enc_vocab_size, dec_vocab_size)
+    enc_vocab_size = len(data['token2id.'+source_lang])
+    dec_vocab_size = len(data['token2id.en'])
 
     train_dataset = NMTDataset(
-        data['train.vi'], data['train.en'], max_sent_len)
+        data['train.'+source_lang], data['train.en'], max_sent_len)
     val_dataset = NMTDataset(
-        data['dev.'+source_lang], data['dev.'+source_lang], max_sent_len)
+        data['dev.'+source_lang], data['dev.en'], max_sent_len)
 
     save_dir = os.path.join(os.getcwd(), 'outputs')
 
@@ -80,7 +79,8 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
 
         encdec = EncDec(word_embdim=ed,
                         word_embeddings=None,
-                        vocab_size=vocab_size,
+                        enc_vocab_size=enc_vocab_size,
+                        dec_vocab_size=dec_vocab_size,
                         enc_hidden_dim=eh,
                         dec_hidden_dim=dh,
                         enc_dropout=edo,

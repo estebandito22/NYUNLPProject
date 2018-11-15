@@ -20,9 +20,10 @@ class EncDec(Trainer):
     """Class to train EncDecNMT network."""
 
     def __init__(self, word_embdim=300, word_embeddings=None,
-                 vocab_size=50000, enc_hidden_dim=256, dec_hidden_dim=256,
-                 enc_dropout=0, dec_dropout=0, num_layers=1, attention=False,
-                 batch_size=64, lr=0.01, weight_decay=0.0, num_epochs=100):
+                 enc_vocab_size=50000, dec_vocab_size=50000,
+                 enc_hidden_dim=256, dec_hidden_dim=256, enc_dropout=0,
+                 dec_dropout=0, num_layers=1, attention=False, batch_size=64,
+                 lr=0.01, weight_decay=0.0, num_epochs=100):
         """Initialize EncDec."""
         Trainer.__init__(self)
         self.word_embdim = word_embdim
@@ -31,7 +32,8 @@ class EncDec(Trainer):
         self.dec_hidden_dim = dec_hidden_dim
         self.enc_dropout = enc_dropout
         self.dec_dropout = dec_dropout
-        self.vocab_size = vocab_size
+        self.enc_vocab_size = enc_vocab_size
+        self.dec_vocab_size = dec_vocab_size
         self.batch_size = batch_size
         self.attention = attention
         self.num_layers = num_layers
@@ -80,7 +82,8 @@ class EncDec(Trainer):
                           'dec_hidden_dim': self.dec_hidden_dim,
                           'enc_dropout': self.enc_dropout,
                           'dec_dropout': self.dec_dropout,
-                          'vocab_size': self.vocab_size,
+                          'enc_vocab_size': self.enc_vocab_size,
+                          'dec_vocab_size': self.dec_vocab_size,
                           'batch_size': self.batch_size,
                           'attention': self.attention,
                           'num_layers': self.num_layers}
@@ -183,7 +186,8 @@ class EncDec(Trainer):
         # Print settings to output file
         print("Word Embedding Dim {}\n\
                Word Embeddings {}\n\
-               Vocabulary Size {}\n\
+               Enc Vocabulary Size {}\n\
+               Dec Vocabulary Size {}\n\
                Encoder Hidden Dim {}\n\
                Decoder Hidden Dim {}\n\
                Encoder Dropout {}\n\
@@ -195,7 +199,8 @@ class EncDec(Trainer):
                Weight Decay {}\n\
                Save Dir: {}".format(
                    self.word_embdim, bool(self.word_embeddings),
-                   self.vocab_size, self.enc_hidden_dim, self.dec_hidden_dim,
+                   self.enc_vocab_size, self.dec_vocab_size,
+                   self.enc_hidden_dim, self.dec_hidden_dim,
                    self.enc_dropout, self.dec_dropout, self.num_layers,
                    self.attention, self.batch_size, self.lr, self.weight_decay,
                    save_dir),
@@ -221,10 +226,10 @@ class EncDec(Trainer):
         samples_processed = 0
 
         # train loop
-        k = 10
-        while self.nn_epoch < self.num_epochs - (k - 1):
+        training = True
+        while training:
 
-            train_loaders = self._batch_loaders(self.train_data, k=k)
+            train_loaders = self._batch_loaders(self.train_data, k=10)
             val_loaders = [val_loader] * len(train_loaders)
 
             loaders = zip(train_loaders, val_loaders)
@@ -269,7 +274,10 @@ class EncDec(Trainer):
                                  len(self.train_data)*self.num_epochs,
                                  train_loss, val_loss), flush=True)
 
-                self.nn_epoch += 1
+                if self.nn_epoch >= self.num_epochs:
+                    training = False
+                else:
+                    self.nn_epoch += 1
 
     def predict(self, loader):
         """Predict input."""
@@ -334,10 +342,11 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_vs_{}_ehd_{}_dhd_{}_ed_{}_dd_{}_nl_{}_at_{}_lr_{}_wd_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ehd_{}_dhd_{}_ed_{}_dd_{}_nl_{}_at_{}_lr_{}_wd_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
-                       self.vocab_size, self.enc_hidden_dim,
-                       self.dec_hidden_dim, self.enc_dropout, self.dec_dropout,
+                       self.enc_vocab_size, self.dec_vocab_size,
+                       self.enc_hidden_dim, self.dec_hidden_dim,
+                       self.enc_dropout, self.dec_dropout,
                        self.num_layers, self.attention, self.lr,
                        self.weight_decay)
 
