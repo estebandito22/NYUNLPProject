@@ -9,7 +9,8 @@ from nmt.nn.enc_dec import EncDec
 
 
 def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
-         attention, batch_size, lr, source_lang, num_epochs, save_dir):
+         attention, batch_size, lr, weight_decay, source_lang, num_epochs,
+         save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -74,6 +75,7 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
                     attention=attention,
                     batch_size=batch_size,
                     lr=lr,
+                    weight_decay=weight_decay,
                     num_epochs=num_epochs)
 
     encdec.fit(train_dataset, val_dataset, save_dir)
@@ -97,6 +99,8 @@ if __name__ == '__main__':
                     help="Batch size for training.")
     ap.add_argument("-lr", "--lr", default=1e-3, type=float,
                     help="Learning rate for training.")
+    ap.add_argument("-wd", "--weight_decay", default=0.0, type=float,
+                    help="Weight decay for training.")
     ap.add_argument("-sl", "--source_lang", default='vi',
                     help="Either 'vi' or 'zh'.")
     ap.add_argument("-ne", "--num_epochs", default=20, type=int,
@@ -113,6 +117,7 @@ if __name__ == '__main__':
          args["attention"],
          args["batch_size"],
          args["lr"],
+         args["weight_decay"],
          args["source_lang"],
          args["num_epochs"],
          args["save_dir"])

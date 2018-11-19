@@ -189,18 +189,19 @@ class EncDec(Trainer):
             save_dir: directory to save model.
         """
         # Print settings to output file
-        print("Word Embedding Dim {}\n\
-               Word Embeddings {}\n\
-               Enc Vocabulary Size {}\n\
-               Dec Vocabulary Size {}\n\
-               Encoder Hidden Dim {}\n\
-               Decoder Hidden Dim {}\n\
-               Encoder Dropout {}\n\
-               Encoder Num Layers {}\n\
-               Attention {}\n\
-               Batch Size {}\n\
-               Learning Rate {}\n\
-               Weight Decay {}\n\
+        print("Settings:\n\
+               Word Embedding Dim: {}\n\
+               Word Embeddings: {}\n\
+               Enc Vocabulary Size: {}\n\
+               Dec Vocabulary Size: {}\n\
+               Encoder Hidden Dim: {}\n\
+               Decoder Hidden Dim: {}\n\
+               Encoder Dropout: {}\n\
+               Encoder Num Layers: {}\n\
+               Attention: {}\n\
+               Batch Size: {}\n\
+               Learning Rate: {}\n\
+               Weight Decay: {}\n\
                Save Dir: {}".format(
                    self.word_embdim, bool(self.word_embeddings),
                    self.enc_vocab_size, self.dec_vocab_size,
