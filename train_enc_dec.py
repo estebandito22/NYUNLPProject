@@ -44,14 +44,22 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
             name = file.split('/')[-1]
             data[name] = r
 
-    max_sent_len = max(
-        data['max_sent_len.en'], data['max_sent_len.'+source_lang])
+    # max_sent_len = max(
+    #     data['max_sent_len.en'], data['max_sent_len.'+source_lang])
+
+    if source_lang == 'vi':
+        max_sent_len = 49  # 95th percentile of vi + en
+    elif source_lang == 'zh':
+        max_sent_len = 57 # 95th percentile of zh + en
+    else:
+        raise ValueError("Unknown source language!")
 
     enc_vocab_size = len(data['token2id.'+source_lang])
     dec_vocab_size = len(data['token2id.en'])
 
     bos_idx = data['token2id.en']['<bos>']
     eos_idx = data['token2id.en']['<eos>']
+    pad_idx = data['token2id.en']['<pad>']
 
     train_dataset = NMTDataset(
         data['train.'+source_lang], data['train.en'],
@@ -68,6 +76,7 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
                     dec_vocab_size=dec_vocab_size,
                     bos_idx=bos_idx,
                     eos_idx=eos_idx,
+                    pad_idx=pad_idx,
                     enc_hidden_dim=enc_hidden_dim,
                     dec_hidden_dim=dec_hidden_dim,
                     enc_dropout=enc_dropout,

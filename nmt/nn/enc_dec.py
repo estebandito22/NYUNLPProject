@@ -22,7 +22,7 @@ class EncDec(Trainer):
 
     def __init__(self, word_embdim=300, word_embeddings=None,
                  enc_vocab_size=50000, dec_vocab_size=50000, bos_idx=2,
-                 eos_idx=3, enc_hidden_dim=256, dec_hidden_dim=256,
+                 eos_idx=3, pad_idx=1, enc_hidden_dim=256, dec_hidden_dim=256,
                  enc_dropout=0, num_layers=1, attention=False, batch_size=64,
                  lr=0.01, weight_decay=0.0, num_epochs=100):
         """Initialize EncDec."""
@@ -36,6 +36,7 @@ class EncDec(Trainer):
         self.dec_vocab_size = dec_vocab_size
         self.bos_idx = bos_idx
         self.eos_idx = eos_idx
+        self.pad_idx = pad_idx
         self.batch_size = batch_size
         self.attention = attention
         self.num_layers = num_layers
@@ -89,12 +90,13 @@ class EncDec(Trainer):
                           'dec_vocab_size': self.dec_vocab_size,
                           'bos_idx': self.bos_idx,
                           'eos_idx': self.eos_idx,
+                          'pad_idx': self.pad_idx,
                           'batch_size': self.batch_size,
                           'attention': self.attention,
                           'num_layers': self.num_layers}
         self.model = EncDecNMT(self.dict_args)
 
-        self.loss_func = nn.NLLLoss()
+        self.loss_func = nn.NLLLoss(ignore_index=self.pad_idx)
         self.optimizer = optim.Adam(self.model.parameters(), self.lr,
                                     weight_decay=self.weight_decay)
 
@@ -228,9 +230,9 @@ class EncDec(Trainer):
             self.val_data, batch_size=1, shuffle=False,
             num_workers=1)
 
-        train_score_loader = DataLoader(
-            self.train_data, batch_size=1, shuffle=False,
-            num_workers=1)
+        # train_score_loader = DataLoader(
+        #     self.train_data, batch_size=1, shuffle=False,
+        #     num_workers=1)
 
         self._init_nn()
 
