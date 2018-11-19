@@ -11,9 +11,9 @@ from nmt.datasets.nmt import NMTDataset
 from nmt.nn.enc_dec import EncDec
 
 
-def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
-         num_layers, attention, batch_size, lr, weight_decay, source_lang,
-         num_epochs, num_searches, save_dir):
+def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
+         attention, batch_size, lr, weight_decay, source_lang, num_epochs,
+         num_searches, save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -32,9 +32,13 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
         inputs_dir, 'iwslt-'+source_lang+'-en', 'token2id.en')
     token2id_sl = os.path.join(
         inputs_dir, 'iwslt-'+source_lang+'-en', 'token2id.'+source_lang)
+    id2token_en = os.path.join(
+        inputs_dir, 'iwslt-'+source_lang+'-en', 'id2token.en')
+    id2token_sl = os.path.join(
+        inputs_dir, 'iwslt-'+source_lang+'-en', 'id2token.'+source_lang)
 
     files = [train_en, train_sl, dev_en, dev_sl, max_sent_en,
-             max_sent_sl, token2id_en, token2id_sl]
+             max_sent_sl, token2id_en, token2id_sl, id2token_en, id2token_sl]
 
     data = defaultdict(list)
     for file in files:
@@ -49,10 +53,15 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
     enc_vocab_size = len(data['token2id.'+source_lang])
     dec_vocab_size = len(data['token2id.en'])
 
+    bos_idx = data['token2id.en']['<bos>']
+    eos_idx = data['token2id.en']['<eos>']
+
     train_dataset = NMTDataset(
-        data['train.'+source_lang], data['train.en'], max_sent_len)
+        data['train.'+source_lang], data['train.en'],
+        data['id2token.'+source_lang], data['id2token.en'], max_sent_len)
     val_dataset = NMTDataset(
-        data['dev.'+source_lang], data['dev.en'], max_sent_len)
+        data['dev.'+source_lang], data['dev.en'],
+        data['id2token.'+source_lang], data['id2token.en'], max_sent_len)
 
     save_dir = os.path.join(os.getcwd(), 'outputs')
 
@@ -72,7 +81,6 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
         eh = int(np.random.choice(enc_hidden_dim))
         dh = int(np.random.choice(dec_hidden_dim))
         edo = float(np.random.uniform(0, enc_dropout))
-        ddo = float(np.random.uniform(0, dec_dropout))
         nl = int(np.random.choice(num_layers))
         wd = float(np.random.uniform(0, weight_decay))
         ed = int(np.random.choice(word_embdim))
@@ -81,10 +89,11 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
                         word_embeddings=None,
                         enc_vocab_size=enc_vocab_size,
                         dec_vocab_size=dec_vocab_size,
+                        bos_idx=bos_idx,
+                        eos_idx=eos_idx,
                         enc_hidden_dim=eh,
                         dec_hidden_dim=dh,
                         enc_dropout=edo,
-                        dec_dropout=ddo,
                         num_layers=nl,
                         attention=attention,
                         batch_size=batch_size,
@@ -110,7 +119,6 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
                        'enc_hidden_dim': ehs,
                        'dec_hidden_dim': dhs,
                        'enc_dropout': edos,
-                       'dec_dropout': ddos,
                        'num_layers': nls,
                        'weight_decay': wds,
                        'val_loss': best_losses,
@@ -133,10 +141,8 @@ if __name__ == '__main__':
                     type=int, help='Space separated list of ints for decoder hidden dims.')
     ap.add_argument("-edo", "--enc_dropout", default=0.0, type=float,
                     help="Max encoder network dropout. NoOp if num_layers = 1.")
-    ap.add_argument("-ddo", "--dec_dropout", default=0.0, type=float,
-                    help="Max eecoder network dropout. NoOp if num_layers = 1.")
     ap.add_argument('-nl', '--num_layers', nargs='+', default=1,
-                    type=int, help='Space separated list of ints for encoder and decoder num_layers')
+                    type=int, help='Space separated list of ints for encoder num_layers')
     ap.add_argument("-at", "--attention", default=False, action='store_true',
                     help="Use attention in decoder.")
     ap.add_argument("-bs", "--batch_size", default=64, type=int,
@@ -159,7 +165,6 @@ if __name__ == '__main__':
          args["enc_hidden_dim"],
          args["dec_hidden_dim"],
          args["enc_dropout"],
-         args["dec_dropout"],
          args["num_layers"],
          args["attention"],
          args["batch_size"],

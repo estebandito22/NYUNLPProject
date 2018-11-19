@@ -25,7 +25,6 @@ class RecurrentDecoder(nn.Module):
         self.vocab_size = dict_args["vocab_size"]
         self.max_sent_len = dict_args["max_sent_len"]
         self.hidden_size = dict_args["hidden_size"]
-        self.dropout = dict_args["dropout"]
         self.batch_size = dict_args["batch_size"]
         self.attention = dict_args["attention"]
 
@@ -35,8 +34,7 @@ class RecurrentDecoder(nn.Module):
         # attention
         if self.attention:
             self.rnn = nn.GRU(
-                self.enc_hidden_dim * 2 + self.word_embdim, self.hidden_size,
-                dropout=self.dropout)
+                self.enc_hidden_dim * 2 + self.word_embdim, self.hidden_size)
 
             dict_args = {'context_size': self.max_sent_len,
                          'context_dim': self.enc_hidden_dim * 2,
@@ -47,8 +45,7 @@ class RecurrentDecoder(nn.Module):
                 self.enc_hidden_dim * 2, self.hidden_size)
         else:
             self.rnn = nn.GRU(
-                self.enc_hidden_dim + self.word_embdim, self.hidden_size,
-                dropout=self.dropout)
+                self.enc_hidden_dim + self.word_embdim, self.hidden_size)
 
             self.init_hidden = nn.Linear(self.enc_hidden_dim, self.hidden_size)
 
@@ -68,7 +65,7 @@ class RecurrentDecoder(nn.Module):
         if self.attention:
             # batch_size x enc_hidden_dim x seqlen
             seq_enc_states = seq_enc_states.permute(1, 2, 0)
-            # batch_size x enc_hidden_dim
+            # seqlen x batch_size x enc_hidden_dim
             context = self.attn_layer(seqlen, self.hidden, seq_enc_states)
         else:
             context = seq_enc_states.expand(seqlen, -1, -1)

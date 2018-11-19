@@ -9,7 +9,7 @@ class NMTDataset(Dataset):
 
     """Class to load NMT dataset."""
 
-    def __init__(self, X, y, max_sent_len):
+    def __init__(self, X, y, X_id2token, y_id2token, max_sent_len):
         """
         Initialize NMTDataset.
 
@@ -19,6 +19,8 @@ class NMTDataset(Dataset):
         """
         self.X = {i: sent for i, sent in enumerate(X)}
         self.y = {i: sent for i, sent in enumerate(y)}
+        self.X_id2token = X_id2token
+        self.y_id2token = y_id2token
         self.max_sent_len = max_sent_len
 
     def randomize_samples(self, k=10):

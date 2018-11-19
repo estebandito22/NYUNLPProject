@@ -8,9 +8,8 @@ from nmt.datasets.nmt import NMTDataset
 from nmt.nn.enc_dec import EncDec
 
 
-def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
-         num_layers, attention, batch_size, lr, source_lang, num_epochs,
-         save_dir):
+def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
+         attention, batch_size, lr, source_lang, num_epochs, save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -29,9 +28,13 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
         inputs_dir, 'iwslt-'+source_lang+'-en', 'token2id.en')
     token2id_sl = os.path.join(
         inputs_dir, 'iwslt-'+source_lang+'-en', 'token2id.'+source_lang)
+    id2token_en = os.path.join(
+        inputs_dir, 'iwslt-'+source_lang+'-en', 'id2token.en')
+    id2token_sl = os.path.join(
+        inputs_dir, 'iwslt-'+source_lang+'-en', 'id2token.'+source_lang)
 
     files = [train_en, train_sl, dev_en, dev_sl, max_sent_en,
-             max_sent_sl, token2id_en, token2id_sl]
+             max_sent_sl, token2id_en, token2id_sl, id2token_en, id2token_sl]
 
     data = defaultdict(list)
     for file in files:
@@ -46,21 +49,32 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, dec_dropout,
     enc_vocab_size = len(data['token2id.'+source_lang])
     dec_vocab_size = len(data['token2id.en'])
 
+    bos_idx = data['token2id.en']['<bos>']
+    eos_idx = data['token2id.en']['<eos>']
+
     train_dataset = NMTDataset(
-        data['train.'+source_lang], data['train.en'], max_sent_len)
+        data['train.'+source_lang], data['train.en'],
+        data['id2token.'+source_lang], data['id2token.en'], max_sent_len)
     val_dataset = NMTDataset(
-        data['dev.'+source_lang], data['dev.en'], max_sent_len)
+        data['dev.'+source_lang], data['dev.en'],
+        data['id2token.'+source_lang], data['id2token.en'], max_sent_len)
 
     save_dir = os.path.join(os.getcwd(), 'outputs')
 
-    encdec = EncDec(word_embdim=word_embdim, word_embeddings=None,
+    encdec = EncDec(word_embdim=word_embdim,
+                    word_embeddings=None,
                     enc_vocab_size=enc_vocab_size,
                     dec_vocab_size=dec_vocab_size,
+                    bos_idx=bos_idx,
+                    eos_idx=eos_idx,
                     enc_hidden_dim=enc_hidden_dim,
-                    dec_hidden_dim=dec_hidden_dim, enc_dropout=enc_dropout,
-                    dec_dropout=dec_dropout, num_layers=num_layers,
-                    attention=attention, batch_size=batch_size,
-                    lr=lr, num_epochs=num_epochs)
+                    dec_hidden_dim=dec_hidden_dim,
+                    enc_dropout=enc_dropout,
+                    num_layers=num_layers,
+                    attention=attention,
+                    batch_size=batch_size,
+                    lr=lr,
+                    num_epochs=num_epochs)
 
     encdec.fit(train_dataset, val_dataset, save_dir)
 
@@ -75,10 +89,8 @@ if __name__ == '__main__':
                     help="Decoder network hidden dimension.")
     ap.add_argument("-edo", "--enc_dropout", default=0.0, type=float,
                     help="Encoder network dropout. NoOp if num_layers = 1.")
-    ap.add_argument("-ddo", "--dec_dropout", default=0.0, type=float,
-                    help="Decoder network dropout. NoOp if num_layers = 1.")
     ap.add_argument("-nl", "--num_layers", default=1, type=int,
-                    help="Number of layers in both encoder and decoder.")
+                    help="Number of layers in both encoder.")
     ap.add_argument("-at", "--attention", default=False, action='store_true',
                     help="Use attention in decoder.")
     ap.add_argument("-bs", "--batch_size", default=64, type=int,
@@ -97,7 +109,6 @@ if __name__ == '__main__':
          args["enc_hidden_dim"],
          args["dec_hidden_dim"],
          args["enc_dropout"],
-         args["dec_dropout"],
          args["num_layers"],
          args["attention"],
          args["batch_size"],
@@ -105,23 +116,3 @@ if __name__ == '__main__':
          args["source_lang"],
          args["num_epochs"],
          args["save_dir"])
-
-
-
-inputs_dir = os.path.join(os.getcwd(), 'inputs')
-train_en = os.path.join(
-    inputs_dir, 'iwslt-'+source_lang+'-en', 'train.en')
-train_sl = os.path.join(
-    inputs_dir, 'iwslt-'+source_lang+'-en', 'train.'+source_lang)
-dev_en = os.path.join(
-    inputs_dir, 'iwslt-'+source_lang+'-en', 'dev.en')
-dev_sl = os.path.join(
-    inputs_dir, 'iwslt-'+source_lang+'-en', 'dev.'+source_lang)
-max_sent_en = os.path.join(
-    inputs_dir, 'iwslt-'+source_lang+'-en', 'max_sent_len.en')
-max_sent_sl = os.path.join(
-    inputs_dir, 'iwslt-'+source_lang+'-en', 'max_sent_len.'+source_lang)
-token2id_en = os.path.join(
-    inputs_dir, 'iwslt-'+source_lang+'-en', 'token2id.en')
-token2id_sl = os.path.join(
-    inputs_dir, 'iwslt-'+source_lang+'-en', 'token2id.vi')

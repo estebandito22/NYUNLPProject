@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from nmt.nn.trainer import Trainer
 from nmt.encoder_decoder.enc_dec import EncDecNMT
+from nmt.evaluators.sacrebleu import BleuEvaluator
 
 
 class EncDec(Trainer):
@@ -20,9 +21,9 @@ class EncDec(Trainer):
     """Class to train EncDecNMT network."""
 
     def __init__(self, word_embdim=300, word_embeddings=None,
-                 enc_vocab_size=50000, dec_vocab_size=50000,
-                 enc_hidden_dim=256, dec_hidden_dim=256, enc_dropout=0,
-                 dec_dropout=0, num_layers=1, attention=False, batch_size=64,
+                 enc_vocab_size=50000, dec_vocab_size=50000, bos_idx=2,
+                 eos_idx=3, enc_hidden_dim=256, dec_hidden_dim=256,
+                 enc_dropout=0, num_layers=1, attention=False, batch_size=64,
                  lr=0.01, weight_decay=0.0, num_epochs=100):
         """Initialize EncDec."""
         Trainer.__init__(self)
@@ -31,9 +32,10 @@ class EncDec(Trainer):
         self.enc_hidden_dim = enc_hidden_dim
         self.dec_hidden_dim = dec_hidden_dim
         self.enc_dropout = enc_dropout
-        self.dec_dropout = dec_dropout
         self.enc_vocab_size = enc_vocab_size
         self.dec_vocab_size = dec_vocab_size
+        self.bos_idx = bos_idx
+        self.eos_idx = eos_idx
         self.batch_size = batch_size
         self.attention = attention
         self.num_layers = num_layers
@@ -61,12 +63,14 @@ class EncDec(Trainer):
         self.model_dir = None
 
         # Performance attributes
-        # self.best_score = 0
+        self.best_score = 0
         self.best_loss = float('inf')
-        # self.best_score_train = 0
+        self.best_score_train = 0
         self.best_loss_train = float('inf')
         self.val_losses = []
         self.train_losses = []
+
+        self.bleu_scorer = BleuEvaluator()
 
         if torch.cuda.is_available():
             self.USE_CUDA = True
@@ -81,9 +85,10 @@ class EncDec(Trainer):
                           'enc_hidden_dim': self.enc_hidden_dim,
                           'dec_hidden_dim': self.dec_hidden_dim,
                           'enc_dropout': self.enc_dropout,
-                          'dec_dropout': self.dec_dropout,
                           'enc_vocab_size': self.enc_vocab_size,
                           'dec_vocab_size': self.dec_vocab_size,
+                          'bos_idx': self.bos_idx,
+                          'eos_idx': self.eos_idx,
                           'batch_size': self.batch_size,
                           'attention': self.attention,
                           'num_layers': self.num_layers}
@@ -191,7 +196,6 @@ class EncDec(Trainer):
                Encoder Hidden Dim {}\n\
                Decoder Hidden Dim {}\n\
                Encoder Dropout {}\n\
-               Decoder Dropout {}\n\
                Encoder Num Layers {}\n\
                Attention {}\n\
                Batch Size {}\n\
@@ -201,7 +205,7 @@ class EncDec(Trainer):
                    self.word_embdim, bool(self.word_embeddings),
                    self.enc_vocab_size, self.dec_vocab_size,
                    self.enc_hidden_dim, self.dec_hidden_dim,
-                   self.enc_dropout, self.dec_dropout, self.num_layers,
+                   self.enc_dropout, self.num_layers,
                    self.attention, self.batch_size, self.lr, self.weight_decay,
                    save_dir),
               flush=True)
@@ -218,6 +222,14 @@ class EncDec(Trainer):
         val_loader = DataLoader(
             self.val_data, batch_size=self.batch_size, shuffle=True,
             num_workers=4)
+
+        val_score_loader = DataLoader(
+            self.val_data, batch_size=1, shuffle=False,
+            num_workers=1)
+
+        train_score_loader = DataLoader(
+            self.train_data, batch_size=1, shuffle=False,
+            num_workers=1)
 
         self._init_nn()
 
@@ -239,13 +251,7 @@ class EncDec(Trainer):
                     print("Initializing train epoch...", flush=True)
                     sp, train_loss = self._train_epoch(train_loader)
                     samples_processed += sp
-
-                    # report
-                    print("Epoch: [{}/{}]\tSamples: [{}/{}]\tTrain Loss:{}".
-                          format(self.nn_epoch, self.num_epochs,
-                                 samples_processed,
-                                 len(self.train_data)*self.num_epochs,
-                                 train_loss), flush=True)
+                    self.train_losses += [train_loss]
 
                 if self.nn_epoch % 1 == 0:
                     # compute loss
@@ -253,26 +259,22 @@ class EncDec(Trainer):
                     _, val_loss = self._eval_epoch(val_loader)
 
                     self.val_losses += [val_loss]
-                    # val_score = self.score(val_loader)
+                    val_score = self.score(val_score_loader)
 
-                    if val_loss < self.best_loss:
-                        # self.best_score = val_score
+                    if val_score > self.best_score:
+                        self.best_score = val_score
                         self.best_loss = val_loss
 
-                        # train_score = self.score(train_loader)
-                        # self.best_score_train = train_score
                         self.best_loss_train = train_loss
 
                         self.save(save_dir)
-                    # else:
-                    #     train_score = None
 
                     # report
-                    print("Epoch: [{}/{}]\tSamples: [{}/{}]\tTrain Loss: {}\tValidation Loss: {}".
+                    print("Epoch: [{}/{}]\tSamples: [{}/{}]\tTrain Loss: {}\tValidation Loss: {}\t Validation BLEU: {}".
                           format(self.nn_epoch, self.num_epochs,
                                  samples_processed,
                                  len(self.train_data)*self.num_epochs,
-                                 train_loss, val_loss), flush=True)
+                                 train_loss, val_loss, val_score), flush=True)
 
                 if self.nn_epoch >= self.num_epochs:
                     training = False
@@ -282,7 +284,7 @@ class EncDec(Trainer):
     def predict(self, loader):
         """Predict input."""
         self.model.eval()
-        index_sequences = []
+        preds = []
         truth = []
 
         with torch.no_grad():
@@ -300,23 +302,26 @@ class EncDec(Trainer):
                 # forward pass
                 self.model.zero_grad()
                 index_seq = self.model(X, X_len, inference=True)
-                index_sequences += [index_seq]
-                truth += [y]
 
-            index_sequences = torch.cat(index_sequences, dim=0)
-            truth = torch.cat(truth, dim=0)
+                # convert to tokens
+                preds += [' '.join([loader.dataset.y_id2token[idx]
+                           for idx in index_seq])]
+                # removes bos, eos and pad
+                truth += [' '.join([loader.dataset.y_id2token[idx]
+                          for idx in y.cpu().tolist()[0] if idx != 0][1:-1])]
 
-        return index_sequences, truth
+        return preds, truth
 
-    def score(self, loader, type='perplexity'):
+    def score(self, loader, type='bleu'):
         """Score model."""
-        index_sequences, truth = self.predict(loader)
+        preds, truth = self.predict(loader)
+
         if type == 'perplexity':
             # score = perplexity_score(truth, index_sequences)
             raise NotImplementedError("Not implemented yet.")
         elif type == 'bleu':
-            # score = bleu_score(truth, index_sequences)
-            raise NotImplementedError("Not implemented yet.")
+            bleu_tuple = self.bleu_scorer.corpus_bleu(preds, [truth])
+            score = bleu_tuple[0]
         else:
             raise ValueError("Unknown score type!")
 
@@ -342,13 +347,12 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ehd_{}_dhd_{}_ed_{}_dd_{}_nl_{}_at_{}_lr_{}_wd_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ehd_{}_dhd_{}_ed_{}_nl_{}_at_{}_lr_{}_wd_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.enc_hidden_dim, self.dec_hidden_dim,
-                       self.enc_dropout, self.dec_dropout,
-                       self.num_layers, self.attention, self.lr,
-                       self.weight_decay)
+                       self.enc_dropout, self.num_layers, self.attention,
+                       self.lr, self.weight_decay)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
                 os.makedirs(os.path.join(models_dir, model_dir))
@@ -356,6 +360,8 @@ class EncDec(Trainer):
             filename = "epoch_{}".format(self.nn_epoch) + '.pth'
             fileloc = os.path.join(models_dir, model_dir, filename)
             with open(fileloc, 'wb') as file:
+                attr_dict = self.__dict__
+                attr_dict.pop('bleu_scorer', None)
                 torch.save({'state_dict': self.model.state_dict(),
                             'dcue_dict': self.__dict__}, file)
 
