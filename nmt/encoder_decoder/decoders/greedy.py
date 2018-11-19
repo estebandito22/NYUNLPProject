@@ -77,7 +77,7 @@ class GreedyDecoder(nn.Module):
         i_t = self.target_word_embd(torch.tensor([self.bos_idx]).unsqueeze(0))
         eos = False
         i = 0
-        while eos is False and i < 50:
+        while eos is False and i < self.max_sent_len * 2:
 
             if self.attention:
                 context = self.attn_layer(
