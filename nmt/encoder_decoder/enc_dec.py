@@ -31,21 +31,17 @@ class EncDecNMT(nn.Module):
         self.max_sent_len = dict_args["max_sent_len"]
         self.enc_hidden_dim = dict_args["enc_hidden_dim"]
         self.dec_hidden_dim = dict_args["dec_hidden_dim"]
-        self.enc_dropout = dict_args["enc_dropout"]
         self.enc_vocab_size = dict_args["enc_vocab_size"]
         self.dec_vocab_size = dict_args["dec_vocab_size"]
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
         self.batch_size = dict_args["batch_size"]
         self.attention = dict_args["attention"]
-        self.num_layers = dict_args["num_layers"]
 
         # encoder
         dict_args = {'word_embdim': self.word_embdim,
                      'vocab_size': self.enc_vocab_size,
                      'hidden_size': self.enc_hidden_dim,
-                     'num_layers': self.num_layers,
-                     'dropout': self.enc_dropout,
                      'batch_size': self.batch_size}
 
         if self.attention:
@@ -69,10 +65,6 @@ class EncDecNMT(nn.Module):
                      'vocab_size': self.enc_vocab_size}
         self.source_word_embd = WordEmbeddings(dict_args)
 
-        dict_args = {'word_embdim': self.word_embdim,
-                     'vocab_size': self.dec_vocab_size}
-        self.target_word_embd = WordEmbeddings(dict_args)
-
         # inference decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
                      'word_embdim': self.word_embdim,
@@ -81,7 +73,6 @@ class EncDecNMT(nn.Module):
                      'hidden_size': self.dec_hidden_dim,
                      'batch_size': self.batch_size,
                      'attention': self.attention,
-                     'target_word_embd': self.target_word_embd,
                      'bos_idx': self.bos_idx,
                      'eos_idx': self.eos_idx}
         self.inference_decoder = GreedyDecoder(dict_args)
@@ -106,8 +97,7 @@ class EncDecNMT(nn.Module):
             return seq_indexes
 
         else:
-            target_seq_word_embds = self.target_word_embd(target_indexseq)
             log_probs = self.decoder(
-                target_seq_word_embds, t_lengths, source_seq_enc_states, z0)
+                target_indexseq, t_lengths, source_seq_enc_states, z0)
 
         return log_probs

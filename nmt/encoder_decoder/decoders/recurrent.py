@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from nmt.encoder_decoder.decoders.attention import AttentionMechanism
+from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 
 
 class RecurrentDecoder(nn.Module):
@@ -52,9 +53,16 @@ class RecurrentDecoder(nn.Module):
         # mlp output
         self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
 
-    def forward(self, seq_word_embds, seq_lengths,
+        # target embeddings
+        dict_args = {'word_embdim': self.word_embdim,
+                     'vocab_size': self.vocab_size}
+        self.target_word_embd = WordEmbeddings(dict_args)
+
+    def forward(self, seq_word_indexes, seq_lengths,
                 seq_enc_states, seq_enc_hidden):
         """Forward pass."""
+        seq_word_embds = self.target_word_embd(seq_word_indexes)
+
         self.hidden = self.init_hidden(seq_enc_hidden).unsqueeze(0)
         # init output tensor
         seqlen, batch_size, _ = seq_word_embds.size()

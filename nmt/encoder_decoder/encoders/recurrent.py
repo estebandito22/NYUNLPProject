@@ -20,8 +20,6 @@ class RecurrentEncoder(nn.Module):
         self.word_embdim = dict_args["word_embdim"]
         self.vocab_size = dict_args["vocab_size"]
         self.hidden_size = dict_args["hidden_size"]
-        self.num_layers = dict_args["num_layers"]
-        self.dropout = dict_args["dropout"]
         self.batch_size = dict_args["batch_size"]
 
         # GRU
@@ -30,17 +28,14 @@ class RecurrentEncoder(nn.Module):
 
         self.rnn = nn.GRU(
             input_size=self.word_embdim, hidden_size=self.hidden_size,
-            num_layers=self.num_layers, dropout=self.dropout,
-            bidirectional=False)
+            num_layers=1, dropout=0, bidirectional=False)
 
     def init_hidden(self, batch_size):
         """Initialize the hidden state of the RNN."""
         if torch.cuda.is_available():
-            self.hidden = torch.zeros(
-                self.num_layers, batch_size, self.hidden_size).cuda()
+            self.hidden = torch.zeros(1, batch_size, self.hidden_size).cuda()
         else:
-            self.hidden = torch.zeros(
-                self.num_layers, batch_size, self.hidden_size)
+            self.hidden = torch.zeros(1, batch_size, self.hidden_size)
 
     def detach_hidden(self, batch_size):
         """Detach the hidden state of the RNN."""

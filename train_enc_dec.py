@@ -8,9 +8,8 @@ from nmt.datasets.nmt import NMTDataset
 from nmt.nn.enc_dec import EncDec
 
 
-def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
-         attention, batch_size, lr, weight_decay, source_lang, num_epochs,
-         save_dir):
+def main(word_embdim, enc_hidden_dim, dec_hidden_dim, attention, batch_size,
+         lr, weight_decay, source_lang, num_epochs, save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -50,7 +49,7 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
     if source_lang == 'vi':
         max_sent_len = 49  # 95th percentile of vi + en
     elif source_lang == 'zh':
-        max_sent_len = 57 # 95th percentile of zh + en
+        max_sent_len = 57  # 95th percentile of zh + en
     else:
         raise ValueError("Unknown source language!")
 
@@ -63,12 +62,12 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
 
     train_dataset = NMTDataset(
         data['train.'+source_lang], data['train.en'],
-        data['id2token.'+source_lang], data['id2token.en'], max_sent_len)
+        data['id2token.'+source_lang], data['id2token.en'],
+        data['token2id.'+source_lang], data['token2id.en'], max_sent_len)
     val_dataset = NMTDataset(
         data['dev.'+source_lang], data['dev.en'],
-        data['id2token.'+source_lang], data['id2token.en'], max_sent_len)
-
-    save_dir = os.path.join(os.getcwd(), 'outputs')
+        data['id2token.'+source_lang], data['id2token.en'],
+        data['token2id.'+source_lang], data['token2id.en'], max_sent_len)
 
     encdec = EncDec(word_embdim=word_embdim,
                     word_embeddings=None,
@@ -79,8 +78,6 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_dropout, num_layers,
                     pad_idx=pad_idx,
                     enc_hidden_dim=enc_hidden_dim,
                     dec_hidden_dim=dec_hidden_dim,
-                    enc_dropout=enc_dropout,
-                    num_layers=num_layers,
                     attention=attention,
                     batch_size=batch_size,
                     lr=lr,
@@ -98,10 +95,6 @@ if __name__ == '__main__':
                     help="Encoder network hidden dimension.")
     ap.add_argument("-dh", "--dec_hidden_dim", default=256, type=int,
                     help="Decoder network hidden dimension.")
-    ap.add_argument("-edo", "--enc_dropout", default=0.0, type=float,
-                    help="Encoder network dropout. NoOp if num_layers = 1.")
-    ap.add_argument("-nl", "--num_layers", default=1, type=int,
-                    help="Number of layers in both encoder.")
     ap.add_argument("-at", "--attention", default=False, action='store_true',
                     help="Use attention in decoder.")
     ap.add_argument("-bs", "--batch_size", default=64, type=int,
@@ -121,8 +114,6 @@ if __name__ == '__main__':
     main(args["word_embdim"],
          args["enc_hidden_dim"],
          args["dec_hidden_dim"],
-         args["enc_dropout"],
-         args["num_layers"],
          args["attention"],
          args["batch_size"],
          args["lr"],

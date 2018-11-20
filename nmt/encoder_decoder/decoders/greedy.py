@@ -1,10 +1,13 @@
 """PyTorch class for a recurrent network sentence decoder."""
 
+from collections import OrderedDict
+
 import torch
 from torch import nn
 import torch.nn.functional as F
 
 from nmt.encoder_decoder.decoders.attention import AttentionMechanism
+from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 
 
 class GreedyDecoder(nn.Module):
@@ -26,7 +29,6 @@ class GreedyDecoder(nn.Module):
         self.hidden_size = dict_args["hidden_size"]
         self.batch_size = dict_args["batch_size"]
         self.attention = dict_args["attention"]
-        self.target_word_embd = dict_args["target_word_embd"]
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
 
@@ -54,12 +56,24 @@ class GreedyDecoder(nn.Module):
         # mlp output
         self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
 
+        # target embeddings
+        dict_args = {'word_embdim': self.word_embdim,
+                     'vocab_size': self.vocab_size}
+        self.target_word_embd = WordEmbeddings(dict_args)
+
     def _load_state(self, recurrent_decoder_state):
         # load pre-trained decoder state
-        for (k, v) in recurrent_decoder_state.items():
-            if k.find('_l*') > -1:
-                k = k[:-3]
-            setattr(self, k, v)
+        state_dict = OrderedDict()
+
+        for k in recurrent_decoder_state.keys():
+            if k.find('rnn.') > -1:
+                key = k[:-3]
+            else:
+                key = k
+
+            state_dict[key] = recurrent_decoder_state[k]
+
+        self.load_state_dict(state_dict)
 
     def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state):
         """Forward pass."""
@@ -74,7 +88,11 @@ class GreedyDecoder(nn.Module):
         out_seq_indexes = []
 
         # initialize bos for forward decoding
-        i_t = self.target_word_embd(torch.tensor([self.bos_idx]).unsqueeze(0))
+        start_idx = torch.tensor([self.bos_idx]).unsqueeze(0)
+        if torch.cuda.is_available():
+            start_idx = start_idx.cuda()
+
+        i_t = self.target_word_embd(start_idx)
         eos = False
         i = 0
         while eos is False and i < self.max_sent_len * 2:

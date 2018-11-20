@@ -2,6 +2,7 @@
 
 import os
 import multiprocessing
+import copy
 
 import torch
 from torch import nn
@@ -23,15 +24,14 @@ class EncDec(Trainer):
     def __init__(self, word_embdim=300, word_embeddings=None,
                  enc_vocab_size=50000, dec_vocab_size=50000, bos_idx=2,
                  eos_idx=3, pad_idx=1, enc_hidden_dim=256, dec_hidden_dim=256,
-                 enc_dropout=0, num_layers=1, attention=False, batch_size=64,
-                 lr=0.01, weight_decay=0.0, num_epochs=100):
+                 attention=False, batch_size=64, lr=0.01, weight_decay=0.0,
+                 num_epochs=100):
         """Initialize EncDec."""
         Trainer.__init__(self)
         self.word_embdim = word_embdim
         self.word_embeddings = word_embeddings
         self.enc_hidden_dim = enc_hidden_dim
         self.dec_hidden_dim = dec_hidden_dim
-        self.enc_dropout = enc_dropout
         self.enc_vocab_size = enc_vocab_size
         self.dec_vocab_size = dec_vocab_size
         self.bos_idx = bos_idx
@@ -39,7 +39,6 @@ class EncDec(Trainer):
         self.pad_idx = pad_idx
         self.batch_size = batch_size
         self.attention = attention
-        self.num_layers = num_layers
         self.batch_size = batch_size
         self.lr = lr
         self.weight_decay = weight_decay
@@ -85,15 +84,13 @@ class EncDec(Trainer):
                           'max_sent_len': self.max_sent_len,
                           'enc_hidden_dim': self.enc_hidden_dim,
                           'dec_hidden_dim': self.dec_hidden_dim,
-                          'enc_dropout': self.enc_dropout,
                           'enc_vocab_size': self.enc_vocab_size,
                           'dec_vocab_size': self.dec_vocab_size,
                           'bos_idx': self.bos_idx,
                           'eos_idx': self.eos_idx,
                           'pad_idx': self.pad_idx,
                           'batch_size': self.batch_size,
-                          'attention': self.attention,
-                          'num_layers': self.num_layers}
+                          'attention': self.attention}
         self.model = EncDecNMT(self.dict_args)
 
         self.loss_func = nn.NLLLoss(ignore_index=self.pad_idx)
@@ -117,18 +114,23 @@ class EncDec(Trainer):
             X = batch_samples['X']
             X_len = batch_samples['X_len']
             # batch_size x seqlen
-            y = batch_samples['y']
-            y_len = batch_samples['y_len']
+            t = batch_samples['y'][:, :-1]
+            t_len = batch_samples['y_len'] - 1
+            # batch_size x seqlen
+            y = batch_samples['y'][:, 1:]
+            y_len = batch_samples['y_len'] - 1
 
             if self.USE_CUDA:
                 X = X.cuda()
                 X_len = X_len.cuda()
+                t = t.cuda()
+                t_len = t_len.cuda()
                 y = y.cuda()
                 y_len = y_len.cuda()
 
             # forward pass
             self.model.zero_grad()
-            log_probs = self.model(X, X_len, y, y_len)
+            log_probs = self.model(X, X_len, t, t_len)
 
             # backward pass
             loss = self.loss_func(log_probs, y)
@@ -157,18 +159,23 @@ class EncDec(Trainer):
                 X = batch_samples['X']
                 X_len = batch_samples['X_len']
                 # batch_size x seqlen
-                y = batch_samples['y']
-                y_len = batch_samples['y_len']
+                t = batch_samples['y'][:, :-1]
+                t_len = batch_samples['y_len'] - 1
+                # batch_size x seqlen
+                y = batch_samples['y'][:, 1:]
+                y_len = batch_samples['y_len'] - 1
 
                 if self.USE_CUDA:
                     X = X.cuda()
                     X_len = X_len.cuda()
+                    t = t.cuda()
+                    t_len = t_len.cuda()
                     y = y.cuda()
                     y_len = y_len.cuda()
 
                 # forward pass
                 self.model.zero_grad()
-                log_probs = self.model(X, X_len, y, y_len)
+                log_probs = self.model(X, X_len, t, t_len)
 
                 # backward pass
                 loss = self.loss_func(log_probs, y)
@@ -198,8 +205,6 @@ class EncDec(Trainer):
                Dec Vocabulary Size: {}\n\
                Encoder Hidden Dim: {}\n\
                Decoder Hidden Dim: {}\n\
-               Encoder Dropout: {}\n\
-               Encoder Num Layers: {}\n\
                Attention: {}\n\
                Batch Size: {}\n\
                Learning Rate: {}\n\
@@ -208,7 +213,6 @@ class EncDec(Trainer):
                    self.word_embdim, bool(self.word_embeddings),
                    self.enc_vocab_size, self.dec_vocab_size,
                    self.enc_hidden_dim, self.dec_hidden_dim,
-                   self.enc_dropout, self.num_layers,
                    self.attention, self.batch_size, self.lr, self.weight_decay,
                    save_dir),
               flush=True)
@@ -244,7 +248,7 @@ class EncDec(Trainer):
         training = True
         while training:
 
-            train_loaders = self._batch_loaders(self.train_data, k=10)
+            train_loaders = self._batch_loaders(self.train_data, k=1)
             val_loaders = [val_loader] * len(train_loaders)
 
             loaders = zip(train_loaders, val_loaders)
@@ -300,6 +304,7 @@ class EncDec(Trainer):
 
                 if self.USE_CUDA:
                     X = X.cuda()
+                    X_len = X_len.cuda()
                     y = y.cuda()
 
                 # forward pass
@@ -308,7 +313,7 @@ class EncDec(Trainer):
 
                 # convert to tokens
                 preds += [' '.join([loader.dataset.y_id2token[idx]
-                           for idx in index_seq])]
+                          for idx in index_seq])]
                 # removes bos, eos and pad
                 truth += [' '.join([loader.dataset.y_id2token[idx]
                           for idx in y.cpu().tolist()[0] if idx != 0][1:-1])]
@@ -350,12 +355,11 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ehd_{}_dhd_{}_ed_{}_nl_{}_at_{}_lr_{}_wd_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ehd_{}_dhd_{}_at_{}_lr_{}_wd_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.enc_hidden_dim, self.dec_hidden_dim,
-                       self.enc_dropout, self.num_layers, self.attention,
-                       self.lr, self.weight_decay)
+                       self.attention, self.lr, self.weight_decay)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
                 os.makedirs(os.path.join(models_dir, model_dir))
@@ -363,10 +367,10 @@ class EncDec(Trainer):
             filename = "epoch_{}".format(self.nn_epoch) + '.pth'
             fileloc = os.path.join(models_dir, model_dir, filename)
             with open(fileloc, 'wb') as file:
-                attr_dict = self.__dict__
+                attr_dict = copy.deepcopy(self.__dict__)
                 attr_dict.pop('bleu_scorer', None)
                 torch.save({'state_dict': self.model.state_dict(),
-                            'dcue_dict': self.__dict__}, file)
+                            'dcue_dict': attr_dict}, file)
 
     def load(self, model_dir, epoch):
         """
