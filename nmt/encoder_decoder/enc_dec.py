@@ -29,19 +29,24 @@ class EncDecNMT(nn.Module):
         self.word_embdim = dict_args["word_embdim"]
         self.word_embeddings = dict_args["word_embeddings"]
         self.max_sent_len = dict_args["max_sent_len"]
-        self.enc_hidden_dim = dict_args["enc_hidden_dim"]
-        self.dec_hidden_dim = dict_args["dec_hidden_dim"]
         self.enc_vocab_size = dict_args["enc_vocab_size"]
         self.dec_vocab_size = dict_args["dec_vocab_size"]
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
+        self.enc_hidden_dim = dict_args["enc_hidden_dim"]
+        self.dec_hidden_dim = dict_args["dec_hidden_dim"]
+        self.enc_num_layers = dict_args["enc_num_layers"]
+        self.enc_dropout = dict_args["enc_dropout"]
         self.batch_size = dict_args["batch_size"]
         self.attention = dict_args["attention"]
 
         # encoder
         dict_args = {'word_embdim': self.word_embdim,
+                     'word_embeddings': self.word_embeddings[0],
                      'vocab_size': self.enc_vocab_size,
                      'hidden_size': self.enc_hidden_dim,
+                     'num_layers': self.enc_num_layers,
+                     'dropout': self.enc_dropout,
                      'batch_size': self.batch_size}
 
         if self.attention:
@@ -52,7 +57,9 @@ class EncDecNMT(nn.Module):
 
         # decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
+                     'enc_num_layers': self.enc_num_layers,
                      'word_embdim': self.word_embdim,
+                     'word_embeddings': self.word_embeddings[1],
                      'vocab_size': self.dec_vocab_size,
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.dec_hidden_dim,
@@ -60,14 +67,11 @@ class EncDecNMT(nn.Module):
                      'attention': self.attention}
         self.decoder = RecurrentDecoder(dict_args)
 
-        # word embd
-        dict_args = {'word_embdim': self.word_embdim,
-                     'vocab_size': self.enc_vocab_size}
-        self.source_word_embd = WordEmbeddings(dict_args)
-
         # inference decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
+                     'enc_num_layers': self.enc_num_layers,
                      'word_embdim': self.word_embdim,
+                     'word_embeddings': self.word_embeddings[1],
                      'vocab_size': self.dec_vocab_size,
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.dec_hidden_dim,
@@ -83,9 +87,7 @@ class EncDecNMT(nn.Module):
         batch_size = source_indexseq.size()[0]
 
         self.encoder.detach_hidden(batch_size)
-        source_seq_word_embds = self.source_word_embd(source_indexseq)
-        source_seq_enc_states, z0 = self.encoder(
-            source_seq_word_embds, s_lengths)
+        source_seq_enc_states, z0 = self.encoder(source_indexseq, s_lengths)
 
         if inference:
             # TODO: Implement BeamSearchDecoder

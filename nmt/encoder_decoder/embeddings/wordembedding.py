@@ -1,5 +1,6 @@
 """PyTorch class for word embedding."""
 
+import torch
 import torch.nn as nn
 
 
@@ -20,9 +21,16 @@ class WordEmbeddings(nn.Module):
         super(WordEmbeddings, self).__init__()
 
         self.word_embdim = dict_args["word_embdim"]
+        self.word_embeddings = dict_args["word_embeddings"]
         self.vocab_size = dict_args["vocab_size"]
 
         self.embeddings = nn.Embedding(self.vocab_size, self.word_embdim)
+
+        if self.word_embeddings is not None:
+            if not isinstance(self.word_embeddings, torch.Tensor):
+                self.word_embeddings = torch.from_numpy(self.word_embeddings)
+            self.embeddings.weight = nn.Parameter(self.word_embeddings)
+            self.embeddings.weight.requires_grad = False
 
     def forward(self, indexseq):
         """

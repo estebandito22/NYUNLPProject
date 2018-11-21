@@ -22,7 +22,9 @@ class RecurrentDecoder(nn.Module):
         """
         super(RecurrentDecoder, self).__init__()
         self.enc_hidden_dim = dict_args["enc_hidden_dim"]
+        self.enc_num_layers = dict_args["enc_num_layers"]
         self.word_embdim = dict_args["word_embdim"]
+        self.word_embeddings = dict_args["word_embeddings"]
         self.vocab_size = dict_args["vocab_size"]
         self.max_sent_len = dict_args["max_sent_len"]
         self.hidden_size = dict_args["hidden_size"]
@@ -43,18 +45,22 @@ class RecurrentDecoder(nn.Module):
             self.attn_layer = AttentionMechanism(dict_args)
 
             self.init_hidden = nn.Linear(
-                self.enc_hidden_dim * 2, self.hidden_size)
+                self.enc_num_layers * self.enc_hidden_dim * 2,
+                self.hidden_size)
         else:
             self.rnn = nn.GRU(
-                self.enc_hidden_dim + self.word_embdim, self.hidden_size)
+                self.enc_num_layers * self.enc_hidden_dim + self.word_embdim,
+                self.hidden_size)
 
-            self.init_hidden = nn.Linear(self.enc_hidden_dim, self.hidden_size)
+            self.init_hidden = nn.Linear(
+                self.enc_num_layers * self.enc_hidden_dim, self.hidden_size)
 
         # mlp output
         self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
 
         # target embeddings
         dict_args = {'word_embdim': self.word_embdim,
+                     'word_embeddings': self.word_embeddings,
                      'vocab_size': self.vocab_size}
         self.target_word_embd = WordEmbeddings(dict_args)
 

@@ -12,9 +12,11 @@ PYTHONPATH=$PYTHONPATH:. python train_enc_dec.py \
     --word_embdim 512 \
     --enc_hidden_dim 512 \
     --dec_hidden_dim 512 \
+    --enc_num_layers 1 \
+    --enc_dropout 0.0 \
     --batch_size 64 \
     --lr 0.001 \
     --weight_decay 0 \
     --source_lang vi \
-    --num_epochs 50 \
+    --num_epochs 20 \
     --save_dir outputs_vi

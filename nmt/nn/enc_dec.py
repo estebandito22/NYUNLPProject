@@ -21,22 +21,24 @@ class EncDec(Trainer):
 
     """Class to train EncDecNMT network."""
 
-    def __init__(self, word_embdim=300, word_embeddings=None,
+    def __init__(self, word_embdim=300, word_embeddings=(None, None),
                  enc_vocab_size=50000, dec_vocab_size=50000, bos_idx=2,
                  eos_idx=3, pad_idx=1, enc_hidden_dim=256, dec_hidden_dim=256,
-                 attention=False, batch_size=64, lr=0.01, weight_decay=0.0,
-                 num_epochs=100):
+                 enc_num_layers=1, enc_dropout=0.0, attention=False,
+                 batch_size=64, lr=0.01, weight_decay=0.0, num_epochs=100):
         """Initialize EncDec."""
         Trainer.__init__(self)
         self.word_embdim = word_embdim
         self.word_embeddings = word_embeddings
-        self.enc_hidden_dim = enc_hidden_dim
-        self.dec_hidden_dim = dec_hidden_dim
         self.enc_vocab_size = enc_vocab_size
         self.dec_vocab_size = dec_vocab_size
         self.bos_idx = bos_idx
         self.eos_idx = eos_idx
         self.pad_idx = pad_idx
+        self.enc_hidden_dim = enc_hidden_dim
+        self.dec_hidden_dim = dec_hidden_dim
+        self.enc_num_layers = enc_num_layers
+        self.enc_dropout = enc_dropout
         self.batch_size = batch_size
         self.attention = attention
         self.batch_size = batch_size
@@ -84,6 +86,8 @@ class EncDec(Trainer):
                           'max_sent_len': self.max_sent_len,
                           'enc_hidden_dim': self.enc_hidden_dim,
                           'dec_hidden_dim': self.dec_hidden_dim,
+                          'enc_num_layers': self.enc_num_layers,
+                          'enc_dropout': self.enc_dropout,
                           'enc_vocab_size': self.enc_vocab_size,
                           'dec_vocab_size': self.dec_vocab_size,
                           'bos_idx': self.bos_idx,
@@ -205,14 +209,18 @@ class EncDec(Trainer):
                Dec Vocabulary Size: {}\n\
                Encoder Hidden Dim: {}\n\
                Decoder Hidden Dim: {}\n\
+               Encoder Num Layers: {}\n\
+               Encoder Dropout: {}\n\
                Attention: {}\n\
                Batch Size: {}\n\
                Learning Rate: {}\n\
                Weight Decay: {}\n\
                Save Dir: {}".format(
-                   self.word_embdim, bool(self.word_embeddings),
+                   self.word_embdim,
+                   False if self.word_embeddings[0] is None else True,
                    self.enc_vocab_size, self.dec_vocab_size,
                    self.enc_hidden_dim, self.dec_hidden_dim,
+                   self.enc_num_layers, self.enc_dropout,
                    self.attention, self.batch_size, self.lr, self.weight_decay,
                    save_dir),
               flush=True)
@@ -355,10 +363,11 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ehd_{}_dhd_{}_at_{}_lr_{}_wd_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ehd_{}_dhd_{}_enl_{}_edo_{}_at_{}_lr_{}_wd_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.enc_hidden_dim, self.dec_hidden_dim,
+                       self.enc_num_layers, self.enc_dropout,
                        self.attention, self.lr, self.weight_decay)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
