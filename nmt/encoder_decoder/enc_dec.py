@@ -36,7 +36,9 @@ class EncDecNMT(nn.Module):
         self.enc_hidden_dim = dict_args["enc_hidden_dim"]
         self.dec_hidden_dim = dict_args["dec_hidden_dim"]
         self.enc_num_layers = dict_args["enc_num_layers"]
+        self.dec_num_layers = dict_args["dec_num_layers"]
         self.enc_dropout = dict_args["enc_dropout"]
+        self.dec_dropout = dict_args["dec_dropout"]
         self.batch_size = dict_args["batch_size"]
         self.attention = dict_args["attention"]
 
@@ -60,6 +62,8 @@ class EncDecNMT(nn.Module):
                      'enc_num_layers': self.enc_num_layers,
                      'word_embdim': self.word_embdim,
                      'word_embeddings': self.word_embeddings[1],
+                     'num_layers': self.dec_num_layers,
+                     'dropout': self.dec_dropout,
                      'vocab_size': self.dec_vocab_size,
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.dec_hidden_dim,
@@ -72,6 +76,8 @@ class EncDecNMT(nn.Module):
                      'enc_num_layers': self.enc_num_layers,
                      'word_embdim': self.word_embdim,
                      'word_embeddings': self.word_embeddings[1],
+                     'num_layers': self.dec_num_layers,
+                     'dropout': self.dec_dropout,
                      'vocab_size': self.dec_vocab_size,
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.dec_hidden_dim,

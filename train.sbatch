@@ -13,7 +13,9 @@ PYTHONPATH=$PYTHONPATH:. python train_enc_dec.py \
     --enc_hidden_dim 512 \
     --dec_hidden_dim 512 \
     --enc_num_layers 1 \
+    --dec_num_layers 2 \
     --enc_dropout 0.0 \
+    --dec_dropout 0.0 \
     --batch_size 64 \
     --lr 0.001 \
     --weight_decay 0 \

@@ -10,8 +10,8 @@ from nmt.nn.enc_dec import EncDec
 
 
 def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
-         enc_num_layers, enc_dropout, attention, batch_size, lr, weight_decay,
-         source_lang, num_epochs, save_dir):
+         enc_num_layers, dec_num_layers, enc_dropout, dec_dropout, attention,
+         batch_size, lr, weight_decay, source_lang, num_epochs, save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -98,7 +98,9 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
                     enc_hidden_dim=enc_hidden_dim,
                     dec_hidden_dim=dec_hidden_dim,
                     enc_num_layers=enc_num_layers,
+                    dec_num_layers=dec_num_layers,
                     enc_dropout=enc_dropout,
+                    dec_dropout=dec_dropout,
                     attention=attention,
                     batch_size=batch_size,
                     lr=lr,
@@ -118,10 +120,14 @@ if __name__ == '__main__':
                     help="Encoder network hidden dimension.")
     ap.add_argument("-dh", "--dec_hidden_dim", default=256, type=int,
                     help="Decoder network hidden dimension.")
-    ap.add_argument("-nl", "--enc_num_layers", default=1, type=int,
+    ap.add_argument("-enl", "--enc_num_layers", default=1, type=int,
                     help="Number of layers in encoder.")
-    ap.add_argument("-do", "--enc_dropout", default=0.0, type=float,
+    ap.add_argument("-dnl", "--dec_num_layers", default=1, type=int,
+                    help="Number of layers in decoder.")
+    ap.add_argument("-edo", "--enc_dropout", default=0.0, type=float,
                     help="Dropout in encoder.  NoOp if num_layers=1.")
+    ap.add_argument("-ddo", "--dec_dropout", default=0.0, type=float,
+                    help="Dropout in decoder.  NoOp if num_layers=1.")
     ap.add_argument("-at", "--attention", default=False, action='store_true',
                     help="Use attention in decoder.")
     ap.add_argument("-bs", "--batch_size", default=64, type=int,
@@ -143,7 +149,9 @@ if __name__ == '__main__':
          args["enc_hidden_dim"],
          args["dec_hidden_dim"],
          args["enc_num_layers"],
+         args["dec_num_layers"],
          args["enc_dropout"],
+         args["dec_dropout"],
          args["attention"],
          args["batch_size"],
          args["lr"],

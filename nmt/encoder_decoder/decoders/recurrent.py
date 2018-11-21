@@ -25,6 +25,8 @@ class RecurrentDecoder(nn.Module):
         self.enc_num_layers = dict_args["enc_num_layers"]
         self.word_embdim = dict_args["word_embdim"]
         self.word_embeddings = dict_args["word_embeddings"]
+        self.num_layers = dict_args["num_layers"]
+        self.dropout = dict_args["dropout"]
         self.vocab_size = dict_args["vocab_size"]
         self.max_sent_len = dict_args["max_sent_len"]
         self.hidden_size = dict_args["hidden_size"]
@@ -37,23 +39,26 @@ class RecurrentDecoder(nn.Module):
         # attention
         if self.attention:
             self.rnn = nn.GRU(
-                self.enc_hidden_dim * 2 + self.word_embdim, self.hidden_size)
+                self.enc_hidden_dim * 2 + self.word_embdim, self.hidden_size,
+                num_layers=self.num_layers, dropout=self.dropout)
 
             dict_args = {'context_size': self.max_sent_len,
                          'context_dim': self.enc_hidden_dim * 2,
-                         'hidden_size': self.hidden_size}
+                         'hidden_size': self.hidden_size * self.num_layers}
             self.attn_layer = AttentionMechanism(dict_args)
 
             self.init_hidden = nn.Linear(
                 self.enc_num_layers * self.enc_hidden_dim * 2,
-                self.hidden_size)
+                self.hidden_size * self.num_layers)
         else:
             self.rnn = nn.GRU(
                 self.enc_num_layers * self.enc_hidden_dim + self.word_embdim,
-                self.hidden_size)
+                self.hidden_size, num_layers=self.num_layers,
+                dropout=self.dropout)
 
             self.init_hidden = nn.Linear(
-                self.enc_num_layers * self.enc_hidden_dim, self.hidden_size)
+                self.enc_num_layers * self.enc_hidden_dim,
+                self.hidden_size * self.num_layers)
 
         # mlp output
         self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
@@ -69,18 +74,23 @@ class RecurrentDecoder(nn.Module):
         """Forward pass."""
         seq_word_embds = self.target_word_embd(seq_word_indexes)
 
-        self.hidden = self.init_hidden(seq_enc_hidden).unsqueeze(0)
         # init output tensor
         seqlen, batch_size, _ = seq_word_embds.size()
         log_probs = torch.zeros([seqlen, batch_size, self.vocab_size])
         if torch.cuda.is_available():
             log_probs = log_probs.cuda()
 
+        # init decoder hidden state
+        self.hidden = self.init_hidden(seq_enc_hidden).view(
+            self.num_layers, batch_size, self.hidden_size)
+
         if self.attention:
             # batch_size x enc_hidden_dim x seqlen
             seq_enc_states = seq_enc_states.permute(1, 2, 0)
             # seqlen x batch_size x enc_hidden_dim
-            context = self.attn_layer(seqlen, self.hidden, seq_enc_states)
+            context = self.attn_layer(
+                seqlen, self.hidden.view(1, batch_size, -1), 
+                seq_enc_states)
         else:
             context = seq_enc_states.expand(seqlen, -1, -1)
 

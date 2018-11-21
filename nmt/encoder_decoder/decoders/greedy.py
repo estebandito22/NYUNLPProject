@@ -8,9 +8,10 @@ import torch.nn.functional as F
 
 from nmt.encoder_decoder.decoders.attention import AttentionMechanism
 from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
+from nmt.encoder_decoder.decoders.recurrent import RecurrentDecoder
 
 
-class GreedyDecoder(nn.Module):
+class GreedyDecoder(RecurrentDecoder):
 
     """Recurrent Decoder to decode encoded sentence."""
 
@@ -21,11 +22,12 @@ class GreedyDecoder(nn.Module):
         Args
             dict_args: dictionary containing the following keys:
         """
-        super(GreedyDecoder, self).__init__()
         self.enc_hidden_dim = dict_args["enc_hidden_dim"]
         self.enc_num_layers = dict_args["enc_num_layers"]
         self.word_embdim = dict_args["word_embdim"]
         self.word_embeddings = dict_args["word_embeddings"]
+        self.num_layers = dict_args["num_layers"]
+        self.dropout = dict_args["dropout"]
         self.vocab_size = dict_args["vocab_size"]
         self.max_sent_len = dict_args["max_sent_len"]
         self.hidden_size = dict_args["hidden_size"]
@@ -34,56 +36,26 @@ class GreedyDecoder(nn.Module):
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
 
-        # lstm
-        self.hidden = None
-
-        # attention
-        if self.attention:
-            self.rnn = nn.GRUCell(
-                self.enc_hidden_dim * 2 + self.word_embdim, self.hidden_size)
-
-            dict_args = {'context_size': self.max_sent_len,
-                         'context_dim': self.enc_hidden_dim * 2,
-                         'hidden_size': self.hidden_size}
-            self.attn_layer = AttentionMechanism(dict_args)
-
-            self.init_hidden = nn.Linear(
-                self.enc_num_layers * self.enc_hidden_dim * 2, self.hidden_size)
-        else:
-            self.rnn = nn.GRUCell(
-                self.enc_num_layers * self.enc_hidden_dim + self.word_embdim,
-                self.hidden_size)
-
-            self.init_hidden = nn.Linear(
-                self.enc_num_layers * self.enc_hidden_dim, self.hidden_size)
-
-        # mlp output
-        self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
-
-        # target embeddings
-        dict_args = {'word_embdim': self.word_embdim,
+        dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
+                     'enc_num_layers': self.enc_num_layers,
+                     'word_embdim': self.word_embdim,
                      'word_embeddings': self.word_embeddings,
-                     'vocab_size': self.vocab_size}
-        self.target_word_embd = WordEmbeddings(dict_args)
-
-    def _load_state(self, recurrent_decoder_state):
-        # load pre-trained decoder state
-        state_dict = OrderedDict()
-
-        for k in recurrent_decoder_state.keys():
-            if k.find('rnn.') > -1:
-                key = k[:-3]
-            else:
-                key = k
-
-            state_dict[key] = recurrent_decoder_state[k]
-
-        self.load_state_dict(state_dict)
+                     'num_layers': self.num_layers,
+                     'dropout': self.dropout,
+                     'vocab_size': self.vocab_size,
+                     'max_sent_len': self.max_sent_len,
+                     'hidden_size': self.hidden_size,
+                     'batch_size': self.batch_size,
+                     'attention': self.attention}
+        RecurrentDecoder.__init__(self, dict_args)
 
     def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state):
         """Forward pass."""
-        self._load_state(recurrent_decoder_state)
-        self.hidden = self.init_hidden(seq_enc_hidden.view(1, -1))
+        self.load_state_dict(recurrent_decoder_state)
+
+        self.hidden = self.init_hidden(
+            seq_enc_hidden.view(1, 1, -1)).view(
+                self.num_layers, 1, self.hidden_size)
 
         if self.attention:
             # 1 x enc_hidden_dim x seqlen
@@ -93,7 +65,7 @@ class GreedyDecoder(nn.Module):
         out_seq_indexes = []
 
         # initialize bos for forward decoding
-        start_idx = torch.tensor([self.bos_idx]).unsqueeze(0)
+        start_idx = torch.tensor([self.bos_idx]).view(1, -1)
         if torch.cuda.is_available():
             start_idx = start_idx.cuda()
 
@@ -104,13 +76,13 @@ class GreedyDecoder(nn.Module):
 
             if self.attention:
                 context = self.attn_layer(
-                    1, self.hidden.unsqueeze(0), seq_enc_states)
+                    1, self.hidden.view(1, 1, -1), seq_enc_states)
             else:
                 context = seq_enc_states.view(1, 1, -1)
 
-            context_input = torch.cat([i_t, context], dim=2)[0]
-            self.hidden = self.rnn(context_input, self.hidden)
-            log_probs = F.log_softmax(self.hidden2vocab(self.hidden), dim=1)
+            context_input = torch.cat([i_t, context], dim=2)
+            output, self.hidden = self.rnn(context_input, self.hidden)
+            log_probs = F.log_softmax(self.hidden2vocab(output[0]), dim=1)
             seq_index = log_probs.argmax(dim=1)
 
             if seq_index == self.eos_idx:
