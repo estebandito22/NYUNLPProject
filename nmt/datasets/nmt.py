@@ -10,7 +10,7 @@ class NMTDataset(Dataset):
     """Class to load NMT dataset."""
 
     def __init__(self, X, y, X_id2token, y_id2token, X_token2id, y_token2id,
-                 max_sent_len):
+                 max_sent_len, reversed_in=False):
         """
         Initialize NMTDataset.
 
@@ -25,6 +25,7 @@ class NMTDataset(Dataset):
         self.X_token2id = X_token2id
         self.y_token2id = y_token2id
         self.max_sent_len = max_sent_len
+        self.reversed_in = reversed_in
 
     def randomize_samples(self, k=10):
         """Return index batches of inputs."""
@@ -50,8 +51,13 @@ class NMTDataset(Dataset):
         X_len = min(len(X), self.max_sent_len)
         y_len = min(len(y), self.max_sent_len)
 
+        if self.reversed_in:
+            X_range = reversed(range(X_len))
+        else:
+            X_range = range(X_len)
+
         X_pad = np.zeros(self.max_sent_len)
-        for j in range(X_len):
+        for j in X_range:
             X_pad[j] = X[j]
 
         y_pad = np.zeros(self.max_sent_len)

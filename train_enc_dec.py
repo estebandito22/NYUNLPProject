@@ -11,7 +11,8 @@ from nmt.nn.enc_dec import EncDec
 
 def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
          enc_num_layers, dec_num_layers, enc_dropout, dec_dropout, attention,
-         batch_size, lr, weight_decay, source_lang, num_epochs, save_dir):
+         batch_size, lr, weight_decay, reduce_on_plateau, reversed_in,
+         source_lang, num_epochs, save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -82,11 +83,13 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
     train_dataset = NMTDataset(
         data['train.'+source_lang], data['train.en'],
         data['id2token.'+source_lang], data['id2token.en'],
-        data['token2id.'+source_lang], data['token2id.en'], max_sent_len)
+        data['token2id.'+source_lang], data['token2id.en'],
+        max_sent_len, reversed_in)
     val_dataset = NMTDataset(
         data['dev.'+source_lang], data['dev.en'],
         data['id2token.'+source_lang], data['id2token.en'],
-        data['token2id.'+source_lang], data['token2id.en'], max_sent_len)
+        data['token2id.'+source_lang], data['token2id.en'],
+        max_sent_len, reversed_in)
 
     encdec = EncDec(word_embdim=word_embdim,
                     word_embeddings=word_embeddings,
@@ -105,6 +108,7 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
                     batch_size=batch_size,
                     lr=lr,
                     weight_decay=weight_decay,
+                    reduce_on_plateau=reduce_on_plateau,
                     num_epochs=num_epochs)
 
     encdec.fit(train_dataset, val_dataset, save_dir)
@@ -136,6 +140,11 @@ if __name__ == '__main__':
                     help="Learning rate for training.")
     ap.add_argument("-wd", "--weight_decay", default=0.0, type=float,
                     help="Weight decay for training.")
+    ap.add_argument("-rp", "--reduce_on_plateau", default=False,
+                    action='store_true',
+                    help="Reduce learning rate by 10x after plateau of 10.")
+    ap.add_argument("-re", "--reversed_in", default=False, action='store_true',
+                    help="Reverse input sentence direction.")
     ap.add_argument("-sl", "--source_lang", default='vi',
                     help="Either 'vi' or 'zh'.")
     ap.add_argument("-ne", "--num_epochs", default=20, type=int,
@@ -156,6 +165,8 @@ if __name__ == '__main__':
          args["batch_size"],
          args["lr"],
          args["weight_decay"],
+         args["reduce_on_plateau"],
+         args["reversed_in"],
          args["source_lang"],
          args["num_epochs"],
          args["save_dir"])
