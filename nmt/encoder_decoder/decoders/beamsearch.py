@@ -20,6 +20,9 @@ class Beam(object):
         self.sequence = sequence
         self.hidden = hidden
 
+    def __lt__(self, other):
+        return self.log_prob < other.log_prob
+
 
 class BeamDecoder(RecurrentDecoder):
 
@@ -59,7 +62,7 @@ class BeamDecoder(RecurrentDecoder):
                      'attention': self.attention}
         RecurrentDecoder.__init__(self, dict_args)
 
-    def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state, B=2):
+    def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state, B=1):
         """
         Forward pass with beam search.
 
