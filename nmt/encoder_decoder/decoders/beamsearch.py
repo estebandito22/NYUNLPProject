@@ -59,7 +59,7 @@ class BeamDecoder(RecurrentDecoder):
                      'attention': self.attention}
         RecurrentDecoder.__init__(self, dict_args)
 
-    def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state, B=4):
+    def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state, B=2):
         """
         Forward pass with beam search.
 
@@ -89,52 +89,37 @@ class BeamDecoder(RecurrentDecoder):
         i = 0
         beam_nodes = PriorityQueue()
         while eos is False and i < self.max_sent_len * 2:
-
             if self.attention:
                 context = self.attn_layer(
                     1, self.hidden.view(1, 1, -1), seq_enc_states)
             else:
                 context = seq_enc_states.view(1, 1, -1)
 
-            top_B_beams = [beam_nodes.get() for _ in range(B)]
+            if beam_nodes.empty():
+                top_B_beams = []
+                for _ in range(B):
+                    top_B_beams.append(Beam(0, [], i_t))
+            else:
+                top_B_beams = [beam_nodes.get()[1] for _ in range(B)]
             for top_beam in top_B_beams:
-                i_t = top_beam.hidden
-                context_input = torch.cat([i_t, context], dim=2)
+                hidden_t = top_beam.hidden
+                context_input = torch.cat([hidden_t, context], dim=2)
                 output, self.hidden = self.rnn(context_input, self.hidden)
                 log_probs = F.log_softmax(self.hidden2vocab(output[0]), dim=1)
-                print("The Log probs for BEAM SEARCH:")
-                print(log_probs.shape)
-                print(log_probs[0])
-                # print(log_probs[1])
+
                 # Perform beam search
                 top_B = torch.topk(log_probs, B)
-                top_beam_details = zip(top_B[0].numpy(), top_B[1].numpy())
-                for beam_log_prob, beam_index in top_beam_details:
-                    new_seq = top_beam.sequence + [beam_index]
+                beam_log_probs, beam_seq_indices = top_B
+
+                for _b in range(B):
+                    beam_log_prob, beam_seq_index = beam_log_probs.numpy()[0][_b], beam_seq_indices[0][_b].unsqueeze(0)
+                    new_seq = top_beam.sequence + [beam_seq_index]
                     new_log_prob = top_beam.log_prob + beam_log_prob
-                    new_i_t = self.target_word_embd(seq_index.unsqueeze(0))
-                    possible_top_beam = Beam(new_log_prob, new_seq, new_i_t)
-                    beam_nodes.put(new_log_prob, possible_top_beam)
-            # print(top_B)
-            # for b in range(0,B):
-            #     print(beam_log_probs)
-            #     print(beam_log_probs[0][b])
-            #     print(beam_indices[0][b])
-            #     beam_log_prob, beam_seq_index = beam_log_probs[0][b], beam_indices[0][b]
-            #     beams.append( (beam_log_prob, beam_seq_index) )
-
-                # print(log_prob)
-                # print(seq_index)
-            print(beams)
-            seq_index = log_probs.argmax(dim=1)
-            print(seq_index)
-            raise
-            if seq_index == self.eos_idx:
-                eos = True
-            # else:
-            #     out_seq_indexes.append(seq_index)
-            #     i_t = self.target_word_embd(seq_index.unsqueeze(0))
-
+                    new_hidden_t = self.target_word_embd(beam_seq_index.unsqueeze(0))
+                    possible_top_beam = Beam(new_log_prob, new_seq, new_hidden_t)
+                    beam_nodes.put( (new_log_prob, possible_top_beam) )
+                    if new_seq == self.eos_idx:
+                        eos = True
             i += 1
-
-        return out_seq_indexes  # (list) variable_seqlen
+        out_seq_indexes = beam_nodes.get()[1].sequence
+        return out_seq_indexes
