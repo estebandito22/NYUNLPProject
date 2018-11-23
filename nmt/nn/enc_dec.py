@@ -9,6 +9,7 @@ from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from tqdm import tqdm
 
@@ -26,7 +27,7 @@ class EncDec(Trainer):
                  eos_idx=3, pad_idx=1, enc_hidden_dim=256, dec_hidden_dim=256,
                  enc_num_layers=1, dec_num_layers=1, enc_dropout=0.0,
                  dec_dropout=0.0, attention=False, batch_size=64, lr=0.01,
-                 weight_decay=0.0, num_epochs=100):
+                 weight_decay=0.0, reduce_on_plateau=False, num_epochs=100):
         """Initialize EncDec."""
         Trainer.__init__(self)
         self.word_embdim = word_embdim
@@ -47,8 +48,10 @@ class EncDec(Trainer):
         self.batch_size = batch_size
         self.lr = lr
         self.weight_decay = weight_decay
+        self.reduce_on_plateau = reduce_on_plateau
         self.num_epochs = num_epochs
         self.max_sent_len = None
+        self.reversed_in = None
 
         # Dataset attributes
         self.metadata_csv = None
@@ -62,6 +65,7 @@ class EncDec(Trainer):
         self.loss_func = None
         self.dict_args = None
         self.nn_epoch = 0
+        self.plateau_scheduler = None
 
         # Save load attributes
         self.save_dir = None
@@ -105,6 +109,10 @@ class EncDec(Trainer):
         self.loss_func = nn.NLLLoss(ignore_index=self.pad_idx)
         self.optimizer = optim.Adam(self.model.parameters(), self.lr,
                                     weight_decay=self.weight_decay)
+
+        if self.reduce_on_plateau:
+            self.plateau_scheduler = ReduceLROnPlateau(
+                self.optimizer, patience=10, mode='max')
 
         if self.USE_CUDA:
             self.model = self.model.cuda()
@@ -212,6 +220,7 @@ class EncDec(Trainer):
                Word Embeddings: {}\n\
                Enc Vocabulary Size: {}\n\
                Dec Vocabulary Size: {}\n\
+               Reversed Inputs: {}\n\
                Encoder Hidden Dim: {}\n\
                Decoder Hidden Dim: {}\n\
                Encoder Num Layers: {}\n\
@@ -222,22 +231,29 @@ class EncDec(Trainer):
                Batch Size: {}\n\
                Learning Rate: {}\n\
                Weight Decay: {}\n\
+               Reduce On Plateau: {}\n\
                Save Dir: {}".format(
                    self.word_embdim,
                    False if self.word_embeddings[0] is None else True,
                    self.enc_vocab_size, self.dec_vocab_size,
+                   train_dataset.reversed_in,
                    self.enc_hidden_dim, self.dec_hidden_dim,
                    self.enc_num_layers, self.dec_num_layers,
                    self.enc_dropout, self.dec_dropout,
-                   self.attention, self.batch_size, self.lr, self.weight_decay,
-                   save_dir),
-              flush=True)
+                   self.attention, self.batch_size, self.lr,
+                   self.weight_decay, self.reduce_on_plateau,
+                   save_dir), flush=True)
 
+        # initialize dataset attributes
         self.model_dir = save_dir
         self.train_data = train_dataset
         self.val_data = val_dataset
         self.max_sent_len = max(
             self.train_data.max_sent_len, self.val_data.max_sent_len)
+        # check for reversed_in setting
+        assert self.train_data.reversed_in == self.val_data.reversed_in, \
+            "Training data and validation data must have same reversed_in set."
+        self.reversed_in = self.train_data.reversed_in
 
         train_loader = DataLoader(
             self.train_data, batch_size=self.batch_size, shuffle=True,
@@ -264,7 +280,7 @@ class EncDec(Trainer):
         training = True
         while training:
 
-            train_loaders = self._batch_loaders(self.train_data, k=1)
+            train_loaders = self._batch_loaders(self.train_data, k=5)
             val_loaders = [val_loader] * len(train_loaders)
 
             loaders = zip(train_loaders, val_loaders)
@@ -283,6 +299,9 @@ class EncDec(Trainer):
 
                     self.val_losses += [val_loss]
                     val_score = self.score(val_score_loader)
+
+                    if self.reduce_on_plateau:
+                        self.plateau_scheduler.step(val_loss)
 
                     if val_score > self.best_score:
                         self.best_score = val_score
@@ -371,13 +390,14 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_lr_{}_wd_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_lr_{}_wd_{}_rp_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
-                       self.enc_hidden_dim, self.dec_hidden_dim,
-                       self.enc_num_layers, self.dec_num_layers,
-                       self.enc_dropout, self.dec_dropout,
-                       self.attention, self.lr, self.weight_decay)
+                       self.reversed_in, self.enc_hidden_dim,
+                       self.dec_hidden_dim, self.enc_num_layers,
+                       self.dec_num_layers, self.enc_dropout, self.dec_dropout,
+                       self.attention, self.lr, self.weight_decay,
+                       self.reduce_on_plateau)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
                 os.makedirs(os.path.join(models_dir, model_dir))

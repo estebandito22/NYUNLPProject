@@ -11,9 +11,10 @@ from nmt.datasets.nmt import NMTDataset
 from nmt.nn.enc_dec import EncDec
 
 
-def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_num_layers,
-         dec_num_layers, enc_dropout, dec_dropout, attention, batch_size, lr,
-         weight_decay, source_lang, num_epochs, num_searches, save_dir):
+def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
+         enc_num_layers, dec_num_layers, enc_dropout, dec_dropout, attention,
+         batch_size, lr, weight_decay, reduce_on_plateau, reversed_in,
+         source_lang, num_epochs, num_searches, save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -83,11 +84,13 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_num_layers,
     train_dataset = NMTDataset(
         data['train.'+source_lang], data['train.en'],
         data['id2token.'+source_lang], data['id2token.en'],
-        data['token2id.'+source_lang], data['token2id.en'], max_sent_len)
+        data['token2id.'+source_lang], data['token2id.en'],
+        max_sent_len, reversed_in)
     val_dataset = NMTDataset(
         data['dev.'+source_lang], data['dev.en'],
         data['id2token.'+source_lang], data['id2token.en'],
-        data['token2id.'+source_lang], data['token2id.en'], max_sent_len)
+        data['token2id.'+source_lang], data['token2id.en'],
+        max_sent_len, reversed_in)
 
     ats = []
     ehs = []
@@ -99,6 +102,8 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_num_layers,
     wds = []
     eds = []
     wes = []
+    rps = []
+    ris = []
     best_losses = []
     best_losses_train = []
     best_scores = []
@@ -114,6 +119,8 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_num_layers,
         wd = float(np.random.uniform(0, weight_decay))
         ed = int(np.random.choice(word_embdim))
         we = pretrained_emb
+        rp = reduce_on_plateau
+        ri = reversed_in
 
         encdec = EncDec(word_embdim=ed,
                         word_embeddings=word_embeddings,
@@ -132,6 +139,7 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_num_layers,
                         batch_size=batch_size,
                         lr=lr,
                         weight_decay=wd,
+                        reduce_on_plateau=rp
                         num_epochs=num_epochs)
 
         encdec.fit(train_dataset, val_dataset, save_dir)
@@ -146,6 +154,8 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_num_layers,
         wds += [wd]
         eds += [ed]
         wes += [we]
+        rps += [rp]
+        ris += [ri]
         best_losses += [encdec.best_loss]
         best_losses_train += [encdec.best_loss_train]
         # best_scores += [encdec.best_score]
@@ -159,6 +169,8 @@ def main(word_embdim, enc_hidden_dim, dec_hidden_dim, enc_num_layers,
                        'enc_dropout': edos,
                        'dec_dropout': ddos,
                        'weight_decay': wds,
+                       'reduce_on_plateau': rps,
+                       'reversed_in': ris,
                        'val_loss': best_losses,
                        'train_loss': best_losses_train,
                        'val_score': best_scores,
@@ -195,6 +207,11 @@ if __name__ == '__main__':
                     help="Learning rate for training.")
     ap.add_argument("-wd", "--weight_decay", default=0.0, type=float,
                     help="Weight decay for training.")
+    ap.add_argument("-rp", "--reduce_on_plateau", default=False,
+                    action='store_true',
+                    help="Reduce learning rate by 10x after plateau of 10.")
+    ap.add_argument("-re", "--reversed_in", default=False, action='store_true',
+                    help="Reverse input sentence direction.")
     ap.add_argument("-sl", "--source_lang", default='vi',
                     help="Either 'vi' or 'zh'.")
     ap.add_argument("-ne", "--num_epochs", default=20, type=int,
@@ -217,6 +234,8 @@ if __name__ == '__main__':
          args["batch_size"],
          args["lr"],
          args["weight_decay"],
+         args["reduce_on_plateau"],
+         args["reversed_in"],
          args["source_lang"],
          args["num_epochs"],
          args["num_searches"],
