@@ -11,8 +11,9 @@ from nmt.nn.enc_dec import EncDec
 
 def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
          enc_num_layers, dec_num_layers, enc_dropout, dec_dropout, attention,
-         batch_size, lr, weight_decay, reduce_on_plateau, reversed_in,
-         source_lang, num_epochs, save_dir):
+         beam_width, batch_size, optimize, lr, weight_decay, clip_grad,
+         reduce_on_plateau, multi_step_lr, reversed_in, source_lang,
+         num_epochs, save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -105,10 +106,14 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
                     enc_dropout=enc_dropout,
                     dec_dropout=dec_dropout,
                     attention=attention,
+                    beam_width=beam_width,
                     batch_size=batch_size,
+                    optimize=optimize,
                     lr=lr,
                     weight_decay=weight_decay,
+                    clip_grad=clip_grad,
                     reduce_on_plateau=reduce_on_plateau,
+                    multi_step_lr=multi_step_lr,
                     num_epochs=num_epochs)
 
     encdec.fit(train_dataset, val_dataset, save_dir)
@@ -134,15 +139,24 @@ if __name__ == '__main__':
                     help="Dropout in decoder.  NoOp if num_layers=1.")
     ap.add_argument("-at", "--attention", default=False, action='store_true',
                     help="Use attention in decoder.")
+    ap.add_argument("-bw", "--beam_width", default=1, type=int,
+                    help="Beam width for beam search decoder.")
     ap.add_argument("-bs", "--batch_size", default=64, type=int,
                     help="Batch size for training.")
+    ap.add_argument("-op", "--optimize", default='adam',
+                    help="Optimizier, 'adam' or 'sgd'.")
     ap.add_argument("-lr", "--lr", default=1e-3, type=float,
                     help="Learning rate for training.")
     ap.add_argument("-wd", "--weight_decay", default=0.0, type=float,
                     help="Weight decay for training.")
+    ap.add_argument("-cg", "--clip_grad", default=False, action='store_true',
+                    help="Clip grad norm to 5.")
     ap.add_argument("-rp", "--reduce_on_plateau", default=False,
                     action='store_true',
                     help="Reduce learning rate by 10x after plateau of 10.")
+    ap.add_argument("-ms", "--multi_step_lr", default=False,
+                    action='store_true',
+                    help="Reduce learning rate by multi-step schedule.")
     ap.add_argument("-re", "--reversed_in", default=False, action='store_true',
                     help="Reverse input sentence direction.")
     ap.add_argument("-sl", "--source_lang", default='vi',
@@ -162,10 +176,14 @@ if __name__ == '__main__':
          args["enc_dropout"],
          args["dec_dropout"],
          args["attention"],
+         args["beam_width"],
          args["batch_size"],
+         args["optimize"],
          args["lr"],
          args["weight_decay"],
+         args["clip_grad"],
          args["reduce_on_plateau"],
+         args["multi_step_lr"],
          args["reversed_in"],
          args["source_lang"],
          args["num_epochs"],

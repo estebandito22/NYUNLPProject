@@ -10,6 +10,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import MultiStepLR
 
 from tqdm import tqdm
 
@@ -26,8 +27,9 @@ class EncDec(Trainer):
                  enc_vocab_size=50000, dec_vocab_size=50000, bos_idx=2,
                  eos_idx=3, pad_idx=1, enc_hidden_dim=256, dec_hidden_dim=256,
                  enc_num_layers=1, dec_num_layers=1, enc_dropout=0.0,
-                 dec_dropout=0.0, attention=False, batch_size=64, lr=0.01,
-                 weight_decay=0.0, reduce_on_plateau=False, num_epochs=100):
+                 dec_dropout=0.0, attention=False, beam_width=1, batch_size=64,
+                 optimize='adam', lr=0.01, weight_decay=0.0, clip_grad=False,
+                 reduce_on_plateau=False, multi_step_lr=False, num_epochs=100):
         """Initialize EncDec."""
         Trainer.__init__(self)
         self.word_embdim = word_embdim
@@ -45,13 +47,21 @@ class EncDec(Trainer):
         self.dec_dropout = dec_dropout
         self.batch_size = batch_size
         self.attention = attention
+        self.beam_width = beam_width
         self.batch_size = batch_size
+        self.optimize = optimize
         self.lr = lr
         self.weight_decay = weight_decay
+        self.clip_grad = clip_grad
         self.reduce_on_plateau = reduce_on_plateau
+        self.multi_step_lr = multi_step_lr
         self.num_epochs = num_epochs
         self.max_sent_len = None
         self.reversed_in = None
+
+        assert (multi_step_lr and reduce_on_plateau) is not True, \
+            "Can only use one scheduler!"
+        assert optimize in ['adam', 'sgd'], "optimize must be adam or sgd!"
 
         # Dataset attributes
         self.metadata_csv = None
@@ -66,6 +76,7 @@ class EncDec(Trainer):
         self.dict_args = None
         self.nn_epoch = 0
         self.plateau_scheduler = None
+        self.multi_step_scheduler = None
 
         # Save load attributes
         self.save_dir = None
@@ -103,16 +114,26 @@ class EncDec(Trainer):
                           'eos_idx': self.eos_idx,
                           'pad_idx': self.pad_idx,
                           'batch_size': self.batch_size,
-                          'attention': self.attention}
+                          'attention': self.attention,
+                          'beam_width': self.beam_width}
         self.model = EncDecNMT(self.dict_args)
 
         self.loss_func = nn.NLLLoss(ignore_index=self.pad_idx)
-        self.optimizer = optim.Adam(self.model.parameters(), self.lr,
-                                    weight_decay=self.weight_decay)
+
+        if self.optimize == 'adam':
+            self.optimizer = optim.Adam(self.model.parameters(), self.lr,
+                                        weight_decay=self.weight_decay)
+        elif self.optimize == 'sgd':
+            self.optimizer = optim.SGD(self.model.parameters(), self.lr,
+                                       weight_decay=self.weight_decay)
 
         if self.reduce_on_plateau:
             self.plateau_scheduler = ReduceLROnPlateau(
                 self.optimizer, patience=10, mode='max')
+
+        if self.multi_step_lr:
+            self.multi_step_scheduler = MultiStepLR(
+                self.optimizer, list(range(40, 100, 5)), 0.5)
 
         if self.USE_CUDA:
             self.model = self.model.cuda()
@@ -152,6 +173,8 @@ class EncDec(Trainer):
             # backward pass
             loss = self.loss_func(log_probs, y)
             loss.backward()
+            if self.clip_grad:
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             self.optimizer.step()
 
             # compute train loss
@@ -228,10 +251,14 @@ class EncDec(Trainer):
                Encoder Dropout: {}\n\
                Decoder Dropout: {}\n\
                Attention: {}\n\
+               Beam Width: {}\n\
                Batch Size: {}\n\
+               Optimizer: {}\n\
                Learning Rate: {}\n\
                Weight Decay: {}\n\
+               Clip Grad: {}\n\
                Reduce On Plateau: {}\n\
+               Multi Step LR: {}\n\
                Save Dir: {}".format(
                    self.word_embdim,
                    False if self.word_embeddings[0] is None else True,
@@ -240,8 +267,9 @@ class EncDec(Trainer):
                    self.enc_hidden_dim, self.dec_hidden_dim,
                    self.enc_num_layers, self.dec_num_layers,
                    self.enc_dropout, self.dec_dropout,
-                   self.attention, self.batch_size, self.lr,
-                   self.weight_decay, self.reduce_on_plateau,
+                   self.attention, self.beam_width, self.batch_size,
+                   self.optimize, self.lr, self.weight_decay, self.clip_grad,
+                   self.reduce_on_plateau, self.multi_step_lr,
                    save_dir), flush=True)
 
         # initialize dataset attributes
@@ -302,6 +330,8 @@ class EncDec(Trainer):
 
                     if self.reduce_on_plateau:
                         self.plateau_scheduler.step(val_loss)
+                    if self.multi_step_lr:
+                        self.multi_step_scheduler.step()
 
                     if val_score > self.best_score:
                         self.best_score = val_score
@@ -390,14 +420,15 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_lr_{}_wd_{}_rp_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_rp_{}_ms_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.reversed_in, self.enc_hidden_dim,
                        self.dec_hidden_dim, self.enc_num_layers,
                        self.dec_num_layers, self.enc_dropout, self.dec_dropout,
-                       self.attention, self.lr, self.weight_decay,
-                       self.reduce_on_plateau)
+                       self.attention, self.beam_width, self.optimize, self.lr,
+                       self.weight_decay, self.clip_grad,
+                       self.reduce_on_plateau, self.multi_step_lr)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
                 os.makedirs(os.path.join(models_dir, model_dir))

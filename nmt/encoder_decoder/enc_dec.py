@@ -8,7 +8,8 @@ from nmt.encoder_decoder.encoders.recurrent import RecurrentEncoder
 from nmt.encoder_decoder.encoders.bidirectional import BidirectionalEncoder
 
 from nmt.encoder_decoder.decoders.recurrent import RecurrentDecoder
-from nmt.encoder_decoder.decoders.greedy import GreedyDecoder
+# from nmt.encoder_decoder.decoders.greedy import GreedyDecoder
+from nmt.encoder_decoder.decoders.beamsearch import BeamDecoder
 
 
 class EncDecNMT(nn.Module):
@@ -41,6 +42,7 @@ class EncDecNMT(nn.Module):
         self.dec_dropout = dict_args["dec_dropout"]
         self.batch_size = dict_args["batch_size"]
         self.attention = dict_args["attention"]
+        self.beam_width = dict_args["beam_width"]
 
         # encoder
         dict_args = {'word_embdim': self.word_embdim,
@@ -85,7 +87,7 @@ class EncDecNMT(nn.Module):
                      'attention': self.attention,
                      'bos_idx': self.bos_idx,
                      'eos_idx': self.eos_idx}
-        self.inference_decoder = GreedyDecoder(dict_args)
+        self.inference_decoder = BeamDecoder(dict_args)
 
     def forward(self, source_indexseq, s_lengths,
                 target_indexseq=None, t_lengths=None, inference=False):
@@ -100,7 +102,8 @@ class EncDecNMT(nn.Module):
             # self.decoder = BeamSearchDecoder(dict_args)
             # raise NotImplementedError("Beam Search Decoder not implemented!")
             seq_indexes = self.inference_decoder(
-                source_seq_enc_states, z0, self.decoder.state_dict())
+                source_seq_enc_states, z0, self.decoder.state_dict(),
+                self.beam_width)
 
             return seq_indexes
 

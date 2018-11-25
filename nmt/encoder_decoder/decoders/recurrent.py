@@ -69,6 +69,12 @@ class RecurrentDecoder(nn.Module):
                      'vocab_size': self.vocab_size}
         self.target_word_embd = WordEmbeddings(dict_args)
 
+        # initialize weights
+        # following https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf
+        for name, param in self.rnn.named_parameters():
+            if name.find("weight") > -1:
+                nn.init.uniform_(param, -0.1, 0.1)
+
     def forward(self, seq_word_indexes, seq_lengths,
                 seq_enc_states, seq_enc_hidden):
         """Forward pass."""
@@ -89,7 +95,7 @@ class RecurrentDecoder(nn.Module):
             seq_enc_states = seq_enc_states.permute(1, 2, 0)
             # seqlen x batch_size x enc_hidden_dim
             context = self.attn_layer(
-                seqlen, self.hidden.view(1, batch_size, -1), 
+                seqlen, self.hidden.view(1, batch_size, -1),
                 seq_enc_states)
         else:
             context = seq_enc_states.expand(seqlen, -1, -1)

@@ -15,10 +15,10 @@ class Beam(object):
 
     """Keeps track of details related to a single beam"""
 
-    def __init__(self, log_prob, sequence, hidden):
+    def __init__(self, log_prob, sequence, input_t):
         self.log_prob = log_prob
         self.sequence = sequence
-        self.hidden = hidden
+        self.input_t = input_t
 
     def __lt__(self, other):
         return self.log_prob < other.log_prob
@@ -104,25 +104,32 @@ class BeamDecoder(RecurrentDecoder):
                     top_B_beams.append(Beam(0, [], i_t))
             else:
                 top_B_beams = [beam_nodes.get()[1] for _ in range(B)]
+
+            eos = True
             for top_beam in top_B_beams:
-                hidden_t = top_beam.hidden
-                context_input = torch.cat([hidden_t, context], dim=2)
-                output, self.hidden = self.rnn(context_input, self.hidden)
-                log_probs = F.log_softmax(self.hidden2vocab(output[0]), dim=1)
+                # If all top beams end with <eos> then the search is done.
+                last_idx = top_beam.sequence[-1] if top_beam.sequence else None
+                if last_idx != self.eos_idx:
+                    eos = False
 
-                # Perform beam search
-                top_B = torch.topk(log_probs, B)
-                beam_log_probs, beam_seq_indices = top_B
+                    i_t = top_beam.input_t
+                    context_input = torch.cat([i_t, context], dim=2)
+                    output, self.hidden = self.rnn(context_input, self.hidden)
+                    log_probs = F.log_softmax(self.hidden2vocab(output[0]), dim=1)
 
-                for _b in range(B):
-                    beam_log_prob, beam_seq_index = beam_log_probs.numpy()[0][_b], beam_seq_indices[0][_b].unsqueeze(0)
-                    new_seq = top_beam.sequence + [beam_seq_index]
-                    new_log_prob = top_beam.log_prob + beam_log_prob
-                    new_hidden_t = self.target_word_embd(beam_seq_index.unsqueeze(0))
-                    possible_top_beam = Beam(new_log_prob, new_seq, new_hidden_t)
-                    beam_nodes.put( (new_log_prob, possible_top_beam) )
-                    if new_seq == self.eos_idx:
-                        eos = True
+                    # Perform beam search
+                    top_B = torch.topk(log_probs, B)
+                    beam_log_probs, beam_seq_indices = top_B
+
+                    for _b in range(B):
+                        beam_log_prob = beam_log_probs.cpu().numpy()[0][_b] 
+                        beam_seq_index = beam_seq_indices[0][_b].unsqueeze(0)
+                        new_seq = top_beam.sequence + [beam_seq_index]
+                        new_log_prob = top_beam.log_prob + beam_log_prob
+                        new_input_t = self.target_word_embd(beam_seq_index.unsqueeze(0))
+                        possible_top_beam = Beam(new_log_prob, new_seq, new_input_t)
+                        beam_nodes.put( (new_log_prob, possible_top_beam) )
+
             i += 1
         out_seq_indexes = beam_nodes.get()[1].sequence
         return out_seq_indexes
