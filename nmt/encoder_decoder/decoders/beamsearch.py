@@ -1,15 +1,12 @@
 """PyTorch class for a recurrent network sentence decoder."""
 
-from collections import OrderedDict
+from queue import PriorityQueue
 
 import torch
-from torch import nn
 import torch.nn.functional as F
 
-from nmt.encoder_decoder.decoders.attention import AttentionMechanism
-from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 from nmt.encoder_decoder.decoders.recurrent import RecurrentDecoder
-from queue import PriorityQueue
+
 
 class Beam(object):
 
@@ -122,7 +119,7 @@ class BeamDecoder(RecurrentDecoder):
                     beam_log_probs, beam_seq_indices = top_B
 
                     for _b in range(B):
-                        beam_log_prob = beam_log_probs.cpu().numpy()[0][_b] 
+                        beam_log_prob = beam_log_probs.cpu().numpy()[0][_b]
                         beam_seq_index = beam_seq_indices[0][_b].unsqueeze(0)
                         new_seq = top_beam.sequence + [beam_seq_index]
                         new_log_prob = top_beam.log_prob + beam_log_prob

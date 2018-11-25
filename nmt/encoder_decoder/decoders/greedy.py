@@ -1,13 +1,8 @@
 """PyTorch class for a recurrent network sentence decoder."""
 
-from collections import OrderedDict
-
 import torch
-from torch import nn
 import torch.nn.functional as F
 
-from nmt.encoder_decoder.decoders.attention import AttentionMechanism
-from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 from nmt.encoder_decoder.decoders.recurrent import RecurrentDecoder
 
 
