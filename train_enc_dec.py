@@ -143,7 +143,7 @@ if __name__ == '__main__':
                     help="Dropout in encoder.  NoOp if num_layers=1.")
     ap.add_argument("-ddo", "--dec_dropout", default=0.0, type=float,
                     help="Dropout in decoder.  NoOp if num_layers=1.")
-    ap.add_argument("-ke", "--kernel_size", default=None, type=int,
+    ap.add_argument("-ke", "--kernel_size", default=0, type=int,
                     help="Use a convolutional encoder instead of RNN with specified kernel size.")
     ap.add_argument("-at", "--attention", default=False, action='store_true',
                     help="Use attention in decoder.")
@@ -185,8 +185,8 @@ if __name__ == '__main__':
          args["dec_num_layers"],
          args["enc_dropout"],
          args["dec_dropout"],
-         args["kernel_size"],
          args["attention"],
+         args["kernel_size"],
          args["beam_width"],
          args["batch_size"],
          args["optimize"],
