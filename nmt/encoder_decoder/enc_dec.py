@@ -11,6 +11,7 @@ from nmt.encoder_decoder.encoders.convolutional import ConvolutionalEncoder
 from nmt.encoder_decoder.decoders.recurrent import RecurrentDecoder
 from nmt.encoder_decoder.decoders.greedy import GreedyDecoder
 from nmt.encoder_decoder.decoders.beamsearch import BeamDecoder
+# from nmt.encoder_decoder.decoders.beamsearch import BeamDecoder
 
 
 class EncDecNMT(nn.Module):
@@ -45,6 +46,7 @@ class EncDecNMT(nn.Module):
         self.attention = dict_args["attention"]
         self.beam_width = dict_args["beam_width"]
         self.kernel_size = dict_args["kernel_size"]
+        self.model_type = dict_args["model_type"]
 
         # encoder
         dict_args = {'word_embdim': self.word_embdim,
@@ -54,7 +56,8 @@ class EncDecNMT(nn.Module):
                      'num_layers': self.enc_num_layers,
                      'dropout': self.enc_dropout,
                      'batch_size': self.batch_size,
-                     'kernel_size': self.kernel_size}
+                     'kernel_size': self.kernel_size,
+                     'model_type': self.model_type}
 
         if self.attention:
             self.encoder = BidirectionalEncoder(dict_args)
@@ -76,7 +79,8 @@ class EncDecNMT(nn.Module):
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.dec_hidden_dim,
                      'batch_size': self.batch_size,
-                     'attention': self.attention}
+                     'attention': self.attention,
+                     'model_type': self.model_type}
         self.decoder = RecurrentDecoder(dict_args)
 
         # inference decoder
@@ -92,10 +96,11 @@ class EncDecNMT(nn.Module):
                      'batch_size': self.batch_size,
                      'attention': self.attention,
                      'bos_idx': self.bos_idx,
-                     'eos_idx': self.eos_idx}
+                     'eos_idx': self.eos_idx,
+                     'model_type': self.model_type}
+
         self.inference_decoder = BeamDecoder(dict_args)
         # self.inference_decoder = GreedyDecoder(dict_args)
-
     def forward(self, source_indexseq, s_lengths,
                 target_indexseq=None, t_lengths=None, inference=False):
         """Forward pass."""
@@ -110,6 +115,7 @@ class EncDecNMT(nn.Module):
             # raise NotImplementedError("Beam Search Decoder not implemented!")
             seq_indexes = self.inference_decoder(source_seq_enc_states, z0, self.decoder.state_dict(), self.beam_width)
             # seq_indexes = self.inference_decoder(source_seq_enc_states, z0, self.decoder.state_dict())
+
 
             return seq_indexes
 
