@@ -26,15 +26,25 @@ class BidirectionalEncoder(nn.Module):
         self.num_layers = dict_args["num_layers"]
         self.dropout = dict_args["dropout"]
         self.batch_size = dict_args["batch_size"]
+        self.model_type = dict_args["model_type"]
 
         # GRU
-        self.hidden = None
-        self.init_hidden(self.batch_size)
+        if self.model_type == 'gru':
+            self.hidden = None
+            self.init_hidden(self.batch_size)
 
-        self.rnn = nn.GRU(
-            input_size=self.word_embdim, hidden_size=self.hidden_size,
-            num_layers=self.num_layers, dropout=self.dropout,
-            bidirectional=True)
+            self.rnn = nn.GRU(
+                input_size=self.word_embdim, hidden_size=self.hidden_size,
+                num_layers=self.num_layers, dropout=self.dropout,
+                bidirectional=True)
+        elif self.model_type == 'lstm':
+            self.hidden = (None, None)
+            self.init_hidden(self.batch_size)
+
+            self.rnn = nn.LSTM(
+                input_size=self.word_embdim, hidden_size=self.hidden_size,
+                num_layers=self.num_layers, dropout=self.dropout,
+                bidirectional=True)
 
         # word embd
         dict_args = {'word_embdim': self.word_embdim,
@@ -50,22 +60,45 @@ class BidirectionalEncoder(nn.Module):
 
     def init_hidden(self, batch_size):
         """Initialize the hidden state of the RNN."""
-        if torch.cuda.is_available():
-            self.hidden = torch.zeros(
-                self.num_layers * 2, batch_size, self.hidden_size).cuda()
-        else:
-            self.hidden = torch.zeros(
+
+        if self.model_type == 'gru':
+            hidden = torch.zeros(
                 self.num_layers * 2, batch_size, self.hidden_size)
+            if torch.cuda.is_available():
+                hidden = hidden.cuda()
+            self.hidden = hidden
+
+        elif self.model_type == 'lstm':
+            hidden1 = torch.zeros(
+                self.num_layers * 2, batch_size, self.hidden_size)
+            hidden2 = torch.zeros(
+                self.num_layers * 2, batch_size, self.hidden_size)
+            if torch.cuda.is_available():
+                hidden1 = hidden1.cuda()
+                hidden2 = hidden2.cuda()
+            self.hidden = (hidden1, hidden2)
 
     def detach_hidden(self, batch_size):
         """Detach the hidden state of the RNN."""
-        _, hidden_batch_size, _ = self.hidden.size()
+        if self.model_type == 'gru':
+            hidden = self.hidden
+        elif self.model_type == 'lstm':
+            hidden, c_t = self.hidden
+        _, hidden_batch_size, _ = hidden.size()
+
         if hidden_batch_size != batch_size:
             self.init_hidden(batch_size)
         else:
-            detached_hidden = self.hidden.detach()
-            detached_hidden.zero_()
-            self.hidden = detached_hidden
+            if self.model_type == 'gru':
+                detached_hidden = hidden.detach()
+                detached_hidden.zero_()
+                self.hidden = detached_hidden
+            elif self.model_type == 'lstm':
+                detached_c_t = c_t.detach()
+                detached_c_t.zero_()
+                detached_hidden = hidden.detach()
+                detached_hidden.zero_()
+                self.hidden = (detached_hidden, detached_c_t)
 
     def forward(self, seq_word_indexes, seq_lengths):
         """Forward pass."""
@@ -77,7 +110,10 @@ class BidirectionalEncoder(nn.Module):
         seq_word_embds = seq_word_embds[:, orig2sorted, :]
         seq_word_embds = pack_padded_sequence(seq_word_embds, seq_lengths)
 
-        out, h_n = self.rnn(seq_word_embds, self.hidden)
+        if self.model_type == 'gru':
+            out, h_n = self.rnn(seq_word_embds, self.hidden)
+        elif self.model_type == 'lstm':
+            out, (h_n, c_n) = self.rnn(seq_word_embds, self.hidden)
 
         out = pad_packed_sequence(out, total_length=seqlen)
         out = out[0][:, sorted2orig, :]
