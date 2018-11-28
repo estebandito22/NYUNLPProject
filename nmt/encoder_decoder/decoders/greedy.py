@@ -94,6 +94,10 @@ class GreedyDecoder(RecurrentDecoder):
             context_input = torch.cat([i_t, context], dim=2)
             output, self.hidden = self.rnn(context_input, self.hidden)
             log_probs = F.log_softmax(self.hidden2vocab(output[0]), dim=1)
+            print(log_probs.argmax(dim=1))
+            print(log_probs[0][log_probs.argmax(dim=1)])
+            print(log_probs[1][log_probs.argmax(dim=1)])
+            raise
             seq_index = log_probs.argmax(dim=1)
 
             if seq_index == self.eos_idx:

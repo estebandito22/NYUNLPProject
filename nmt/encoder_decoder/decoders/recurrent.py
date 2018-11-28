@@ -32,33 +32,69 @@ class RecurrentDecoder(nn.Module):
         self.hidden_size = dict_args["hidden_size"]
         self.batch_size = dict_args["batch_size"]
         self.attention = dict_args["attention"]
-
-        # lstm
-        self.hidden = None
+        self.model_type = dict_args["model_type"]
+        # print(self.model_type)
 
         # attention
         if self.attention:
-            self.rnn = nn.GRU(
-                self.enc_hidden_dim * 2 + self.word_embdim, self.hidden_size,
-                num_layers=self.num_layers, dropout=self.dropout)
+
+            if self.model_type == 'gru':
+                self.hidden = None
+                self.rnn = nn.GRU(
+                    self.enc_hidden_dim * 2 + self.word_embdim,
+                    self.hidden_size, num_layers=self.num_layers,
+                    dropout=self.dropout)
+
+                self.init_hidden = nn.Linear(
+                    self.enc_num_layers * self.enc_hidden_dim * 2,
+                    self.hidden_size * self.num_layers)
+
+            elif self.model_type == 'lstm':
+                self.hidden = (None, None)
+                self.rnn = nn.LSTM(
+                    self.enc_hidden_dim * 2 + self.word_embdim,
+                    self.hidden_size, num_layers=self.num_layers,
+                    dropout=self.dropout)
+
+                self.init_hidden1 = nn.Linear(
+                    self.enc_num_layers * self.enc_hidden_dim * 2,
+                    self.hidden_size * self.num_layers)
+
+                self.init_hidden2 = nn.Linear(
+                    self.enc_num_layers * self.enc_hidden_dim * 2,
+                    self.hidden_size * self.num_layers)
 
             dict_args = {'context_size': self.max_sent_len,
                          'context_dim': self.enc_hidden_dim * 2,
                          'hidden_size': self.hidden_size * self.num_layers}
             self.attn_layer = AttentionMechanism(dict_args)
 
-            self.init_hidden = nn.Linear(
-                self.enc_num_layers * self.enc_hidden_dim * 2,
-                self.hidden_size * self.num_layers)
         else:
-            self.rnn = nn.GRU(
-                self.enc_num_layers * self.enc_hidden_dim + self.word_embdim,
-                self.hidden_size, num_layers=self.num_layers,
-                dropout=self.dropout)
+            if self.model_type == 'gru':
+                self.hidden = None
+                self.rnn = nn.GRU(
+                    self.enc_num_layers * self.enc_hidden_dim + self.word_embdim,
+                    self.hidden_size, num_layers=self.num_layers,
+                    dropout=self.dropout)
 
-            self.init_hidden = nn.Linear(
-                self.enc_num_layers * self.enc_hidden_dim,
-                self.hidden_size * self.num_layers)
+                self.init_hidden = nn.Linear(
+                    self.enc_num_layers * self.enc_hidden_dim,
+                    self.hidden_size * self.num_layers)
+
+            elif self.model_type == 'lstm':
+                self.hidden = (None, None)
+                self.rnn = nn.LSTM(
+                    self.enc_num_layers * self.enc_hidden_dim + self.word_embdim,
+                    self.hidden_size, num_layers=self.num_layers,
+                    dropout=self.dropout)
+
+                self.init_hidden1 = nn.Linear(
+                    self.enc_num_layers * self.enc_hidden_dim,
+                    self.hidden_size * self.num_layers)
+
+                self.init_hidden2 = nn.Linear(
+                    self.enc_num_layers * self.enc_hidden_dim,
+                    self.hidden_size * self.num_layers)
 
         # mlp output
         self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
@@ -87,15 +123,27 @@ class RecurrentDecoder(nn.Module):
             log_probs = log_probs.cuda()
 
         # init decoder hidden state
-        self.hidden = self.init_hidden(seq_enc_hidden).view(
-            self.num_layers, batch_size, self.hidden_size)
+        if self.model_type == 'gru':
+            self.hidden = self.init_hidden(seq_enc_hidden).view(
+                self.num_layers, batch_size, self.hidden_size)
+        elif self.model_type == 'lstm':
+            hidden1 = self.init_hidden1(seq_enc_hidden).view(
+                self.num_layers, batch_size, self.hidden_size)
+            hidden2 = self.init_hidden2(seq_enc_hidden).view(
+                self.num_layers, batch_size, self.hidden_size)
+            self.hidden = (hidden1, hidden2)
 
         if self.attention:
             # batch_size x enc_hidden_dim x seqlen
             seq_enc_states = seq_enc_states.permute(1, 2, 0)
             # seqlen x batch_size x enc_hidden_dim
+            if self.model_type == 'gru':
+                hidden = self.hidden
+            elif self.model_type == 'lstm':
+                hidden = self.hidden[0]
+
             context = self.attn_layer(
-                seqlen, self.hidden.view(1, batch_size, -1),
+                seqlen, hidden.view(1, batch_size, -1),
                 seq_enc_states)
         else:
             context = seq_enc_states.expand(seqlen, -1, -1)

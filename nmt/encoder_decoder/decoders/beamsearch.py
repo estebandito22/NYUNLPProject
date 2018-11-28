@@ -45,6 +45,7 @@ class BeamDecoder(RecurrentDecoder):
         self.attention = dict_args["attention"]
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
+        self.model_type = dict_args["model_type"]
 
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
                      'enc_num_layers': self.enc_num_layers,
@@ -56,7 +57,8 @@ class BeamDecoder(RecurrentDecoder):
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.hidden_size,
                      'batch_size': self.batch_size,
-                     'attention': self.attention}
+                     'attention': self.attention,
+                     'model_type': self.model_type}
         RecurrentDecoder.__init__(self, dict_args)
 
     def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state, B=1):
@@ -116,6 +118,7 @@ class BeamDecoder(RecurrentDecoder):
 
                     # Perform beam search
                     top_B = torch.topk(log_probs, B)
+                    # print(top_B)
                     beam_log_probs, beam_seq_indices = top_B
 
                     for _b in range(B):
@@ -126,6 +129,9 @@ class BeamDecoder(RecurrentDecoder):
                         new_input_t = self.target_word_embd(beam_seq_index.unsqueeze(0))
                         possible_top_beam = Beam(new_log_prob, new_seq, new_input_t)
                         beam_nodes.put( (new_log_prob, possible_top_beam) )
+            # if i > 3:
+            #     print(beam_nodes.get())
+            #     raise
 
             i += 1
         out_seq_indexes = beam_nodes.get()[1].sequence
