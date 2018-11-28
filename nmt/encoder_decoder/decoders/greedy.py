@@ -30,6 +30,7 @@ class GreedyDecoder(RecurrentDecoder):
         self.attention = dict_args["attention"]
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
+        self.model_type = dict_args["model_type"]
 
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
                      'enc_num_layers': self.enc_num_layers,
@@ -41,16 +42,26 @@ class GreedyDecoder(RecurrentDecoder):
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.hidden_size,
                      'batch_size': self.batch_size,
-                     'attention': self.attention}
+                     'attention': self.attention,
+                     'model_type': self.model_type}
         RecurrentDecoder.__init__(self, dict_args)
 
     def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state):
         """Forward pass."""
         self.load_state_dict(recurrent_decoder_state)
 
-        self.hidden = self.init_hidden(
-            seq_enc_hidden.view(1, 1, -1)).view(
-                self.num_layers, 1, self.hidden_size)
+        if self.model_type == 'gru':
+            self.hidden = self.init_hidden(
+                seq_enc_hidden.view(1, 1, -1)).view(
+                    self.num_layers, 1, self.hidden_size)
+        if self.model_type == 'lstm':
+            hidden1 = self.init_hidden1(
+                seq_enc_hidden.view(1, 1, -1)).view(
+                    self.num_layers, 1, self.hidden_size)
+            hidden2 = self.init_hidden2(
+                seq_enc_hidden.view(1, 1, -1)).view(
+                    self.num_layers, 1, self.hidden_size)
+            self.hidden = (hidden1, hidden2)
 
         if self.attention:
             # 1 x enc_hidden_dim x seqlen
@@ -70,8 +81,13 @@ class GreedyDecoder(RecurrentDecoder):
         while eos is False and i < self.max_sent_len * 2:
 
             if self.attention:
+                if self.model_type == 'gru':
+                    hidden = self.hidden
+                elif self.model_type == 'lstm':
+                    hidden = self.hidden[0]
+
                 context = self.attn_layer(
-                    1, self.hidden.view(1, 1, -1), seq_enc_states)
+                    1, hidden.view(1, 1, -1), seq_enc_states)
             else:
                 context = seq_enc_states.view(1, 1, -1)
 

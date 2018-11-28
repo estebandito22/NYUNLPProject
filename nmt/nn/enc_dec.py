@@ -29,7 +29,8 @@ class EncDec(Trainer):
                  enc_num_layers=1, dec_num_layers=1, enc_dropout=0.0,
                  dec_dropout=0.0, attention=False, beam_width=1, batch_size=64,
                  optimize='adam', lr=0.01, weight_decay=0.0, clip_grad=False,
-                 reduce_on_plateau=False, multi_step_lr=False, num_epochs=100):
+                 reduce_on_plateau=False, multi_step_lr=False, num_epochs=100,
+                 model_type='lstm'):
         """Initialize EncDec."""
         Trainer.__init__(self)
         self.word_embdim = word_embdim
@@ -56,6 +57,7 @@ class EncDec(Trainer):
         self.reduce_on_plateau = reduce_on_plateau
         self.multi_step_lr = multi_step_lr
         self.num_epochs = num_epochs
+        self.model_type = model_type
         self.max_sent_len = None
         self.reversed_in = None
 
@@ -115,7 +117,8 @@ class EncDec(Trainer):
                           'pad_idx': self.pad_idx,
                           'batch_size': self.batch_size,
                           'attention': self.attention,
-                          'beam_width': self.beam_width}
+                          'beam_width': self.beam_width,
+                          'model_type': self.model_type}
         self.model = EncDecNMT(self.dict_args)
 
         self.loss_func = nn.NLLLoss(ignore_index=self.pad_idx)
@@ -259,6 +262,7 @@ class EncDec(Trainer):
                Clip Grad: {}\n\
                Reduce On Plateau: {}\n\
                Multi Step LR: {}\n\
+               Model Type: {}\n\
                Save Dir: {}".format(
                    self.word_embdim,
                    False if self.word_embeddings[0] is None else True,
@@ -269,7 +273,7 @@ class EncDec(Trainer):
                    self.enc_dropout, self.dec_dropout,
                    self.attention, self.beam_width, self.batch_size,
                    self.optimize, self.lr, self.weight_decay, self.clip_grad,
-                   self.reduce_on_plateau, self.multi_step_lr,
+                   self.reduce_on_plateau, self.multi_step_lr, self.model_type,
                    save_dir), flush=True)
 
         # initialize dataset attributes
@@ -420,7 +424,7 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_rp_{}_ms_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_rp_{}_ms_{}_mt_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.reversed_in, self.enc_hidden_dim,
@@ -428,7 +432,8 @@ class EncDec(Trainer):
                        self.dec_num_layers, self.enc_dropout, self.dec_dropout,
                        self.attention, self.beam_width, self.optimize, self.lr,
                        self.weight_decay, self.clip_grad,
-                       self.reduce_on_plateau, self.multi_step_lr)
+                       self.reduce_on_plateau, self.multi_step_lr,
+                       self.model_type)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
                 os.makedirs(os.path.join(models_dir, model_dir))
