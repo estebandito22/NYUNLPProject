@@ -8,6 +8,7 @@ from nmt.encoder_decoder.encoders.recurrent import RecurrentEncoder
 from nmt.encoder_decoder.encoders.bidirectional import BidirectionalEncoder
 
 from nmt.encoder_decoder.decoders.recurrent import RecurrentDecoder
+from nmt.encoder_decoder.decoders.randomteacher import RandomTeacherDecoder
 from nmt.encoder_decoder.decoders.greedy import GreedyDecoder
 # from nmt.encoder_decoder.decoders.beamsearch import BeamDecoder
 
@@ -44,6 +45,7 @@ class EncDecNMT(nn.Module):
         self.attention = dict_args["attention"]
         self.beam_width = dict_args["beam_width"]
         self.model_type = dict_args["model_type"]
+        self.tf_ratio = dict_args["tf_ratio"]
 
         # encoder
         dict_args = {'word_embdim': self.word_embdim,
@@ -73,8 +75,12 @@ class EncDecNMT(nn.Module):
                      'hidden_size': self.dec_hidden_dim,
                      'batch_size': self.batch_size,
                      'attention': self.attention,
-                     'model_type': self.model_type}
-        self.decoder = RecurrentDecoder(dict_args)
+                     'bos_idx': self.bos_idx,
+                     'eos_idx': self.eos_idx,
+                     'model_type': self.model_type,
+                     'tf_ratio': self.tf_ratio}
+        # self.decoder = RecurrentDecoder(dict_args)
+        self.decoder = RandomTeacherDecoder(dict_args)
 
         # inference decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,

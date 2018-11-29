@@ -102,6 +102,7 @@ class RecurrentEncoder(nn.Module):
 
     def forward(self, seq_word_indexes, seq_lengths):
         """Forward pass."""
+        # seqlen x batch x embedding dim
         seq_word_embds = self.source_word_embd(seq_word_indexes)
 
         _, batch_size, _ = seq_word_embds.size()
@@ -111,11 +112,13 @@ class RecurrentEncoder(nn.Module):
         seq_word_embds = pack_padded_sequence(seq_word_embds, seq_lengths)
 
         if self.model_type == 'gru':
-            _, out = self.rnn(seq_word_embds, self.hidden)
+            _, h_n = self.rnn(seq_word_embds, self.hidden)
         elif self.model_type == 'lstm':
-            _, (out, _) = self.rnn(seq_word_embds, self.hidden)
+            _, (h_n, _) = self.rnn(seq_word_embds, self.hidden)
 
-        out = out[:, sorted2orig, :]
-        out = out.permute(1, 0, 2).contiguous().view(batch_size, -1)
+        # numlayers * num directions x batch size x hidden size
+        h_n = h_n[:, sorted2orig, :]
+        h_n = h_n.permute(1, 0, 2).contiguous().view(batch_size, -1)
+        # batch size x hidden size + numlayers * num directions
 
-        return out, out
+        return h_n, h_n

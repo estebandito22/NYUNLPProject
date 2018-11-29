@@ -13,7 +13,7 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
          enc_num_layers, dec_num_layers, enc_dropout, dec_dropout, attention,
          beam_width, batch_size, optimize, lr, weight_decay, clip_grad,
          reduce_on_plateau, multi_step_lr, reversed_in, source_lang,
-         num_epochs, model_type, save_dir):
+         num_epochs, model_type, tf_ratio, save_dir):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
@@ -115,7 +115,8 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
                     reduce_on_plateau=reduce_on_plateau,
                     multi_step_lr=multi_step_lr,
                     num_epochs=num_epochs,
-                    model_type=model_type)
+                    model_type=model_type,
+                    tf_ratio=tf_ratio)
 
     encdec.fit(train_dataset, val_dataset, save_dir)
 
@@ -168,6 +169,8 @@ if __name__ == '__main__':
                     help="Save directory path.")
     ap.add_argument("-mt", "--model_type", default='lstm',
                     help="Model type to use.  'lstm' or 'gru'.")
+    ap.add_argument("-tf", "--tf_ratio", default=0.5, type=float,
+                    help="Teacher forcing ratio.")
 
     args = vars(ap.parse_args())
     main(args["word_embdim"],
@@ -191,4 +194,5 @@ if __name__ == '__main__':
          args["source_lang"],
          args["num_epochs"],
          args["model_type"],
+         args["tf_ratio"],
          args["save_dir"])

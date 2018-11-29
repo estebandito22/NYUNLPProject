@@ -34,8 +34,11 @@ class AttentionMechanism(nn.Module):
         # init context
         context = torch.zeros(
             [seqlen, hidden.size(1), self.context_dim])
+        attentions = torch.zeros(
+            [seqlen, hidden.size(1), self.context_size])
         if torch.cuda.is_available():
             context = context.cuda()
+            attentions = attentions.cuda()
         # create directed graph for attention at each time step
         for i in range(seqlen):
             # batch_size x context_size x hidden_size
@@ -45,10 +48,11 @@ class AttentionMechanism(nn.Module):
             # -> batch_size x context_size x 1
             attn_weights = F.softmax(torch.matmul(
                 context_proj, hidden.permute(1, 2, 0)), dim=1)
+            attentions[i] = attn_weights.squeeze()
             # mutiplies by batch,
             # (context_dim x context_size) mv (context_size x 1)
             # -> batch_size x context_dim
             context[i] = torch.matmul(
                 contextvects, attn_weights).squeeze()
 
-        return context
+        return context, attentions

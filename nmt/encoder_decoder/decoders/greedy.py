@@ -69,6 +69,8 @@ class GreedyDecoder(RecurrentDecoder):
 
         # init output tensor
         out_seq_indexes = []
+        # init attention reporting
+        out_seq_attentions = []
 
         # initialize bos for forward decoding
         start_idx = torch.tensor([self.bos_idx]).view(1, -1)
@@ -86,11 +88,12 @@ class GreedyDecoder(RecurrentDecoder):
                 elif self.model_type == 'lstm':
                     hidden = self.hidden[0]
 
-                context = self.attn_layer(
+                context, attentions = self.attn_layer(
                     1, hidden.view(1, 1, -1), seq_enc_states)
             else:
                 context = seq_enc_states.view(1, 1, -1)
 
+            out_seq_attentions += [attentions.squeeze()]
             context_input = torch.cat([i_t, context], dim=2)
             output, self.hidden = self.rnn(context_input, self.hidden)
             log_probs = F.log_softmax(self.hidden2vocab(output[0]), dim=1)
@@ -104,4 +107,5 @@ class GreedyDecoder(RecurrentDecoder):
 
             i += 1
 
-        return out_seq_indexes  # (list) variable_seqlen
+        out_seq_attentions = torch.stack(out_seq_attentions)
+        return out_seq_indexes, out_seq_attentions  # (list) variable_seqlen

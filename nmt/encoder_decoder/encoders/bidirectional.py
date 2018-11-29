@@ -102,6 +102,7 @@ class BidirectionalEncoder(nn.Module):
 
     def forward(self, seq_word_indexes, seq_lengths):
         """Forward pass."""
+        # seqlen x batch x embedding dim
         seq_word_embds = self.source_word_embd(seq_word_indexes)
 
         seqlen, batch_size, _ = seq_word_embds.size()
@@ -116,9 +117,12 @@ class BidirectionalEncoder(nn.Module):
             out, (h_n, c_n) = self.rnn(seq_word_embds, self.hidden)
 
         out = pad_packed_sequence(out, total_length=seqlen)
+        # seqlen x batch size x num_directions * hidden size
         out = out[0][:, sorted2orig, :]
 
+        # numlayers * num directions x batch size x hidden size
         h_n = h_n[:, sorted2orig, :]
         h_n = h_n.permute(1, 0, 2).contiguous().view(batch_size, -1)
+        # batch size x hidden size + numlayers * num directions
 
         return out, h_n

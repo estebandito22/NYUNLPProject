@@ -40,6 +40,7 @@ class RecurrentDecoder(nn.Module):
 
             if self.model_type == 'gru':
                 self.hidden = None
+                # self.init_hidden_zeros(self.batch_size)
                 self.rnn = nn.GRU(
                     self.enc_hidden_dim * 2 + self.word_embdim,
                     self.hidden_size, num_layers=self.num_layers,
@@ -50,7 +51,8 @@ class RecurrentDecoder(nn.Module):
                     self.hidden_size * self.num_layers)
 
             elif self.model_type == 'lstm':
-                self.hidden = (None, None)
+                self.hidden = None
+                # self.init_hidden_zeros(self.batch_size)
                 self.rnn = nn.LSTM(
                     self.enc_hidden_dim * 2 + self.word_embdim,
                     self.hidden_size, num_layers=self.num_layers,
@@ -72,6 +74,7 @@ class RecurrentDecoder(nn.Module):
         else:
             if self.model_type == 'gru':
                 self.hidden = None
+                # self.init_hidden_zeros(self.batch_size)
                 self.rnn = nn.GRU(
                     self.enc_num_layers * self.enc_hidden_dim + self.word_embdim,
                     self.hidden_size, num_layers=self.num_layers,
@@ -82,7 +85,8 @@ class RecurrentDecoder(nn.Module):
                     self.hidden_size * self.num_layers)
 
             elif self.model_type == 'lstm':
-                self.hidden = (None, None)
+                self.hidden = None
+                # self.init_hidden_zeros(self.batch_size)
                 self.rnn = nn.LSTM(
                     self.enc_num_layers * self.enc_hidden_dim + self.word_embdim,
                     self.hidden_size, num_layers=self.num_layers,
@@ -111,9 +115,52 @@ class RecurrentDecoder(nn.Module):
             if name.find("weight") > -1:
                 nn.init.uniform_(param, -0.1, 0.1)
 
+    # def init_hidden_zeros(self, batch_size):
+    #     """Initialize the hidden state of the RNN."""
+    #     if self.model_type == 'gru':
+    #         hidden = torch.zeros(
+    #             self.num_layers, batch_size, self.hidden_size)
+    #         if torch.cuda.is_available():
+    #             hidden = hidden.cuda()
+    #         self.hidden = hidden
+    #
+    #     elif self.model_type == 'lstm':
+    #         hidden1 = torch.zeros(
+    #             self.num_layers, batch_size, self.hidden_size)
+    #         hidden2 = torch.zeros(
+    #             self.num_layers, batch_size, self.hidden_size)
+    #         if torch.cuda.is_available():
+    #             hidden1 = hidden1.cuda()
+    #             hidden2 = hidden2.cuda()
+    #         self.hidden = (hidden1, hidden2)
+
+    # def detach_hidden(self, batch_size):
+    #     """Detach the hidden state of the RNN."""
+    #     if self.hidden:
+    #         if self.model_type == 'gru':
+    #             hidden = self.hidden
+    #         elif self.model_type == 'lstm':
+    #             hidden, c_t = self.hidden
+    #         _, hidden_batch_size, _ = hidden.size()
+    #
+    #         # if hidden_batch_size != batch_size:
+    #         #     self.init_hidden_zeros(batch_size)
+    #         # else:
+    #         if self.model_type == 'gru':
+    #             detached_hidden = hidden.detach()
+    #             detached_hidden.zero_()
+    #             self.hidden = detached_hidden
+    #         elif self.model_type == 'lstm':
+    #             detached_c_t = c_t.detach()
+    #             detached_c_t.zero_()
+    #             detached_hidden = hidden.detach()
+    #             detached_hidden.zero_()
+    #             self.hidden = (detached_hidden, detached_c_t)
+
     def forward(self, seq_word_indexes, seq_lengths,
                 seq_enc_states, seq_enc_hidden):
         """Forward pass."""
+        # seqlen x batch size x embedding dim
         seq_word_embds = self.target_word_embd(seq_word_indexes)
 
         # init output tensor
@@ -136,17 +183,19 @@ class RecurrentDecoder(nn.Module):
         if self.attention:
             # batch_size x enc_hidden_dim x seqlen
             seq_enc_states = seq_enc_states.permute(1, 2, 0)
-            # seqlen x batch_size x enc_hidden_dim
+
             if self.model_type == 'gru':
                 hidden = self.hidden
             elif self.model_type == 'lstm':
                 hidden = self.hidden[0]
 
-            context = self.attn_layer(
+            context, _ = self.attn_layer(
                 seqlen, hidden.view(1, batch_size, -1),
                 seq_enc_states)
         else:
+            # seqlen
             context = seq_enc_states.expand(seqlen, -1, -1)
+
 
         # prep input
         seq_lengths, orig2sorted = seq_lengths.sort(0, descending=True)
