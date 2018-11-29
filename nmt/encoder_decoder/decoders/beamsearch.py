@@ -70,9 +70,18 @@ class BeamDecoder(RecurrentDecoder):
         """
         self.load_state_dict(recurrent_decoder_state)
 
-        self.hidden = self.init_hidden(
-            seq_enc_hidden.view(1, 1, -1)).view(
-                self.num_layers, 1, self.hidden_size)
+        if self.model_type == 'gru':
+            self.hidden = self.init_hidden(
+                seq_enc_hidden.view(1, 1, -1)).view(
+                    self.num_layers, 1, self.hidden_size)
+        if self.model_type == 'lstm':
+            hidden1 = self.init_hidden1(
+                seq_enc_hidden.view(1, 1, -1)).view(
+                    self.num_layers, 1, self.hidden_size)
+            hidden2 = self.init_hidden2(
+                seq_enc_hidden.view(1, 1, -1)).view(
+                    self.num_layers, 1, self.hidden_size)
+            self.hidden = (hidden1, hidden2)
 
         if self.attention:
             # 1 x enc_hidden_dim x seqlen
