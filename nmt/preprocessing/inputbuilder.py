@@ -46,8 +46,6 @@ class InputBuilder(object):
     def _build_vocab(self, all_tokens):
         """Build vocabulary and indexes."""
         token_counter = Counter(all_tokens)
-        token_counter = Counter(
-            x for x in token_counter.elements() if token_counter[x] >= 5)
         vocab, _ = zip(*token_counter.most_common(self.vocab_size+2))
 
         id2token = list(vocab)
