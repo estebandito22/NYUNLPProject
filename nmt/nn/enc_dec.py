@@ -26,7 +26,7 @@ class EncDec(Trainer):
     def __init__(self, word_embdim=300, word_embeddings=(None, None),
                  enc_vocab_size=50000, dec_vocab_size=50000, bos_idx=2,
                  eos_idx=3, pad_idx=1, enc_hidden_dim=256, dec_hidden_dim=256,
-                 enc_num_layers=1, dec_num_layers=1, enc_dropout=0.0, kernel_size=3,
+                 enc_num_layers=1, dec_num_layers=1, enc_dropout=0.0, kernel_size=0,
                  dec_dropout=0.0, attention=False, beam_width=1, batch_size=64,
                  optimize='adam', lr=0.01, weight_decay=0.0, clip_grad=False,
                  reduce_on_plateau=False, multi_step_lr=False, num_epochs=100,
