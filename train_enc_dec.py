@@ -154,12 +154,12 @@ if __name__ == '__main__':
                     help="Batch size for training.")
     ap.add_argument("-op", "--optimize", default='adam',
                     help="Optimizier, 'adam' or 'sgd'.")
-    ap.add_argument("-lr", "--lr", default=1e-3, type=float,
+    ap.add_argument("-lr", "--lr", default=0.25, type=float,
                     help="Learning rate for training.")
     ap.add_argument("-wd", "--weight_decay", default=0.0, type=float,
                     help="Weight decay for training.")
-    ap.add_argument("-cg", "--clip_grad", default=False, action='store_true',
-                    help="Clip grad norm to 5.")
+    ap.add_argument("-cg", "--clip_grad", default=0.1, type=float,
+                    help="Clip grad norm to value.  No clipping if 0.")
     ap.add_argument("-rp", "--reduce_on_plateau", default=False,
                     action='store_true',
                     help="Reduce learning rate by 10x after plateau of 10.")

@@ -141,7 +141,7 @@ class EncDec(Trainer):
 
         if self.multi_step_lr:
             self.multi_step_scheduler = MultiStepLR(
-                self.optimizer, list(range(40, 100, 5)), 0.5)
+                self.optimizer, list(range(8, 20, 1)), 0.5)
 
         if self.USE_CUDA:
             self.model = self.model.cuda()
@@ -181,8 +181,9 @@ class EncDec(Trainer):
             # backward pass
             loss = self.loss_func(log_probs, y)
             loss.backward()
-            if self.clip_grad:
-                nn.utils.clip_grad_norm_(self.model.parameters(), 5)
+            if self.clip_grad > 0:
+                nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.clip_grad)
             self.optimizer.step()
 
             # compute train loss
@@ -401,19 +402,18 @@ class EncDec(Trainer):
 
         return preds, truth, attn
 
-    def score(self, loader, type='bleu'):
+    def score(self, loader, scorer='bleu'):
         """Score model."""
-        preds, truth, attn = self.predict(loader)
+        preds, truth, _ = self.predict(loader)
         idx = random.randint(0, len(loader.dataset))
         print("Preds\n", preds[idx])
         print("Truth\n", truth[idx])
 
-        if type == 'perplexity':
+        if scorer == 'perplexity':
             # score = perplexity_score(truth, index_sequences)
             raise NotImplementedError("Not implemented yet.")
-        elif type == 'bleu':
+        elif scorer == 'bleu':
             bleu_tuple = self.bleu_scorer.corpus_bleu(preds, [truth])
-            score = bleu_tuple[0]
         else:
             raise ValueError("Unknown score type!")
 

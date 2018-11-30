@@ -114,7 +114,7 @@ class BidirectionalEncoder(nn.Module):
         if self.model_type == 'gru':
             out, h_n = self.rnn(seq_word_embds, self.hidden)
         elif self.model_type == 'lstm':
-            out, (h_n, c_n) = self.rnn(seq_word_embds, self.hidden)
+            out, (h_n, _) = self.rnn(seq_word_embds, self.hidden)
 
         out = pad_packed_sequence(out, total_length=seqlen)
         # seqlen x batch size x num_directions * hidden size
