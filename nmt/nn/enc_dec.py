@@ -403,9 +403,6 @@ class EncDec(Trainer):
     def score(self, loader, type='bleu'):
         """Score model."""
         preds, truth, attn = self.predict(loader)
-        print("preds", preds[0])
-        print("truth", truth[0])
-        print("attn", attn[0])
 
         if type == 'perplexity':
             # score = perplexity_score(truth, index_sequences)
