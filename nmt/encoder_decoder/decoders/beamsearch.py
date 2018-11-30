@@ -123,8 +123,12 @@ class BeamDecoder(RecurrentDecoder):
 
                     # create context
                     if self.attention:
+                        if self.model_type == 'gru':
+                            h_t = hidden
+                        elif self.model_type == 'lstm':
+                            (h_t, c_t) = hidden
                         context, attentions = self.attn_layer(
-                            1, hidden.view(1, 1, -1), seq_enc_states)
+                            1, h_t.view(1, 1, -1), seq_enc_states)
                     else:
                         context = seq_enc_states.view(1, 1, -1)
 
