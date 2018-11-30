@@ -3,6 +3,7 @@
 import os
 import multiprocessing
 import copy
+import random
 
 import torch
 from torch import nn
@@ -317,7 +318,7 @@ class EncDec(Trainer):
         training = True
         while training:
 
-            train_loaders = self._batch_loaders(self.train_data, k=5)
+            train_loaders = self._batch_loaders(self.train_data, k=1)
             val_loaders = [val_loader] * len(train_loaders)
 
             loaders = zip(train_loaders, val_loaders)
@@ -403,6 +404,9 @@ class EncDec(Trainer):
     def score(self, loader, type='bleu'):
         """Score model."""
         preds, truth, attn = self.predict(loader)
+        idx = random.randint(0, len(loader.dataset))
+        print("Preds\n", preds[idx])
+        print("Truth\n", truth[idx])
 
         if type == 'perplexity':
             # score = perplexity_score(truth, index_sequences)
