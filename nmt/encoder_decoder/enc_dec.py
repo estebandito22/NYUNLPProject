@@ -86,8 +86,8 @@ class EncDecNMT(nn.Module):
                      'eos_idx': self.eos_idx,
                      'model_type': self.model_type,
                      'tf_ratio': self.tf_ratio}
-        # self.decoder = RecurrentDecoder(dict_args)
-        self.decoder = RandomTeacherDecoder(dict_args)
+        self.decoder = RecurrentDecoder(dict_args)
+        # self.decoder = RandomTeacherDecoder(dict_args)
 
         # inference decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,

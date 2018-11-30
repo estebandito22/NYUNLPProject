@@ -115,48 +115,6 @@ class RecurrentDecoder(nn.Module):
             if name.find("weight") > -1:
                 nn.init.uniform_(param, -0.1, 0.1)
 
-    # def init_hidden_zeros(self, batch_size):
-    #     """Initialize the hidden state of the RNN."""
-    #     if self.model_type == 'gru':
-    #         hidden = torch.zeros(
-    #             self.num_layers, batch_size, self.hidden_size)
-    #         if torch.cuda.is_available():
-    #             hidden = hidden.cuda()
-    #         self.hidden = hidden
-    #
-    #     elif self.model_type == 'lstm':
-    #         hidden1 = torch.zeros(
-    #             self.num_layers, batch_size, self.hidden_size)
-    #         hidden2 = torch.zeros(
-    #             self.num_layers, batch_size, self.hidden_size)
-    #         if torch.cuda.is_available():
-    #             hidden1 = hidden1.cuda()
-    #             hidden2 = hidden2.cuda()
-    #         self.hidden = (hidden1, hidden2)
-
-    # def detach_hidden(self, batch_size):
-    #     """Detach the hidden state of the RNN."""
-    #     if self.hidden:
-    #         if self.model_type == 'gru':
-    #             hidden = self.hidden
-    #         elif self.model_type == 'lstm':
-    #             hidden, c_t = self.hidden
-    #         _, hidden_batch_size, _ = hidden.size()
-    #
-    #         # if hidden_batch_size != batch_size:
-    #         #     self.init_hidden_zeros(batch_size)
-    #         # else:
-    #         if self.model_type == 'gru':
-    #             detached_hidden = hidden.detach()
-    #             detached_hidden.zero_()
-    #             self.hidden = detached_hidden
-    #         elif self.model_type == 'lstm':
-    #             detached_c_t = c_t.detach()
-    #             detached_c_t.zero_()
-    #             detached_hidden = hidden.detach()
-    #             detached_hidden.zero_()
-    #             self.hidden = (detached_hidden, detached_c_t)
-
     def forward(self, seq_word_indexes, seq_lengths,
                 seq_enc_states, seq_enc_hidden):
         """Forward pass."""
