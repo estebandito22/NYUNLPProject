@@ -37,6 +37,7 @@ class EncDecNMT(nn.Module):
         self.dec_vocab_size = dict_args["dec_vocab_size"]
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
+        self.pad_idx = dict_args["pad_idx"]
         self.enc_hidden_dim = dict_args["enc_hidden_dim"]
         self.dec_hidden_dim = dict_args["dec_hidden_dim"]
         self.enc_num_layers = dict_args["enc_num_layers"]
@@ -112,6 +113,8 @@ class EncDecNMT(nn.Module):
                 target_indexseq=None, t_lengths=None, inference=False):
         """Forward pass."""
         batch_size = source_indexseq.size()[0]
+        # batch_size x maxseqlen
+        encoder_padding_mask = source_indexseq.eq(self.pad_idx).unsqueeze(2)
 
         # self.encoder.detach_hidden(batch_size)
         self.encoder.init_hidden(batch_size)
@@ -119,15 +122,17 @@ class EncDecNMT(nn.Module):
 
         if inference:
             # seq_indexes = self.inference_decoder(
-            #     source_seq_enc_states, z0, self.decoder.state_dict(),
-            #     self.beam_width)
+            #     source_seq_enc_states, encoder_padding_mask, z0,
+            #     self.decoder.state_dict(), self.beam_width)
             seq_indexes = self.inference_decoder(
-               source_seq_enc_states, z0, self.decoder.state_dict())
+                source_seq_enc_states, encoder_padding_mask, z0,
+                self.decoder.state_dict())
 
             return seq_indexes
 
         else:
             log_probs = self.decoder(
-                target_indexseq, t_lengths, source_seq_enc_states, z0)
+                target_indexseq, t_lengths, source_seq_enc_states,
+                encoder_padding_mask, z0)
 
         return log_probs

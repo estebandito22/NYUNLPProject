@@ -27,10 +27,11 @@ class AttentionMechanism(nn.Module):
 
         self.attn = nn.Linear(self.context_dim, self.hidden_size)
 
-    def forward(self, seqlen, hidden, contextvects):
+    def forward(self, seqlen, hidden, contextvects, padding_mask=None):
         """Forward pass."""
         # contextvects: batch_size x context_dim x context_size
         # hidden: 1 x batch_size x hidden_size
+        # padding mask: batch_size x maxseqlen x 1
         # init context
         context = torch.zeros(
             [seqlen, hidden.size(1), self.context_dim])
@@ -46,8 +47,12 @@ class AttentionMechanism(nn.Module):
             # multiplies by batch,
             # (context_size x hidden_size) mv (hidden_size x 1)
             # -> batch_size x context_size x 1
-            attn_weights = F.softmax(torch.matmul(
-                context_proj, hidden.permute(1, 2, 0)), dim=1)
+            attn_scores = torch.matmul(context_proj, hidden.permute(1, 2, 0))
+            # dont attend over padding
+            if padding_mask is not None:
+                attn_scores.masked_fill_(padding_mask, float('-inf'))
+            # normalize attn scores
+            attn_weights = F.softmax(attn_scores, dim=1)
             attentions[i] = attn_weights.squeeze()
             # mutiplies by batch,
             # (context_dim x context_size) mv (context_size x 1)

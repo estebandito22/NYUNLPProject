@@ -116,7 +116,7 @@ class RecurrentDecoder(nn.Module):
                 nn.init.uniform_(param, -0.1, 0.1)
 
     def forward(self, seq_word_indexes, seq_lengths,
-                seq_enc_states, seq_enc_hidden):
+                seq_enc_states, enc_padding_mask, seq_enc_hidden):
         """Forward pass."""
         # seqlen x batch size x embedding dim
         seq_word_embds = self.target_word_embd(seq_word_indexes)
@@ -149,7 +149,7 @@ class RecurrentDecoder(nn.Module):
 
             context, _ = self.attn_layer(
                 seqlen, hidden.view(1, batch_size, -1),
-                seq_enc_states)
+                seq_enc_states, enc_padding_mask)
         else:
             # seqlen
             context = seq_enc_states.expand(seqlen, -1, -1)

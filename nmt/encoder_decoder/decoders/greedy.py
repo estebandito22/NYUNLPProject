@@ -46,7 +46,8 @@ class GreedyDecoder(RecurrentDecoder):
                      'model_type': self.model_type}
         RecurrentDecoder.__init__(self, dict_args)
 
-    def forward(self, seq_enc_states, seq_enc_hidden, recurrent_decoder_state):
+    def forward(self, seq_enc_states, enc_padding_mask, seq_enc_hidden,
+                recurrent_decoder_state):
         """Forward pass."""
         self.load_state_dict(recurrent_decoder_state)
 
@@ -89,7 +90,7 @@ class GreedyDecoder(RecurrentDecoder):
                     hidden = self.hidden[0]
 
                 context, attentions = self.attn_layer(
-                    1, hidden.view(1, 1, -1), seq_enc_states)
+                    1, hidden.view(1, 1, -1), seq_enc_states, enc_padding_mask)
             else:
                 context = seq_enc_states.view(1, 1, -1)
 
