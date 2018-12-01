@@ -12,7 +12,7 @@ from nmt.nn.enc_dec import EncDec
 def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
          enc_num_layers, dec_num_layers, enc_dropout, dec_dropout, attention,
          kernel_size, beam_width, batch_size, optimize, lr, weight_decay, clip_grad,
-         reduce_on_plateau, multi_step_lr, reversed_in, source_lang,
+         lr_scheduler, min_lr, reversed_in, source_lang,
          num_epochs, model_type, tf_ratio, save_dir):
 
 
@@ -86,7 +86,7 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
         word_embeddings = (None, None)
 
     train_dataset = NMTDataset(
-        data['train.'+source_lang], data['train.en'],
+        data['train.'+source_lang][:10], data['train.en'][:10],
         data['id2token.'+source_lang], data['id2token.en'],
         data['token2id.'+source_lang], data['token2id.en'],
         max_sent_len, reversed_in)
@@ -117,8 +117,8 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
                     lr=lr,
                     weight_decay=weight_decay,
                     clip_grad=clip_grad,
-                    reduce_on_plateau=reduce_on_plateau,
-                    multi_step_lr=multi_step_lr,
+                    lr_scheduler=lr_scheduler,
+                    min_lr=min_lr,
                     num_epochs=num_epochs,
                     model_type=model_type,
                     tf_ratio=tf_ratio)
@@ -160,12 +160,10 @@ if __name__ == '__main__':
                     help="Weight decay for training.")
     ap.add_argument("-cg", "--clip_grad", default=0.1, type=float,
                     help="Clip grad norm to value.  No clipping if 0.")
-    ap.add_argument("-rp", "--reduce_on_plateau", default=False,
-                    action='store_true',
-                    help="Reduce learning rate by 10x after plateau of 10.")
-    ap.add_argument("-ms", "--multi_step_lr", default=False,
-                    action='store_true',
-                    help="Reduce learning rate by multi-step schedule.")
+    ap.add_argument("-ls", "--lr_scheduler", default='fixed',
+                    help="Learning rate scheduler. 'fixed', 'reduce_on_plateau' or 'multi_step_lr'.")
+    ap.add_argument("-ml", "--min_lr", default=1e-4, type=float,
+                    help="Minimum learning rate for LR scheduler.")
     ap.add_argument("-re", "--reversed_in", default=False, action='store_true',
                     help="Reverse input sentence direction.")
     ap.add_argument("-sl", "--source_lang", default='vi',
@@ -196,8 +194,8 @@ if __name__ == '__main__':
          args["lr"],
          args["weight_decay"],
          args["clip_grad"],
-         args["reduce_on_plateau"],
-         args["multi_step_lr"],
+         args["lr_scheduler"],
+         args["min_lr"],
          args["reversed_in"],
          args["source_lang"],
          args["num_epochs"],

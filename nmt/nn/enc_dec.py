@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.optim.lr_scheduler import MultiStepLR
+from torch.optim.lr_scheduler import StepLR
 
 from tqdm import tqdm
 
@@ -29,9 +30,9 @@ class EncDec(Trainer):
                  eos_idx=3, pad_idx=1, enc_hidden_dim=256, dec_hidden_dim=256,
                  enc_num_layers=1, dec_num_layers=1, enc_dropout=0.0, kernel_size=0,
                  dec_dropout=0.0, attention=False, beam_width=1, batch_size=64,
-                 optimize='adam', lr=0.01, weight_decay=0.0, clip_grad=False,
-                 reduce_on_plateau=False, multi_step_lr=False, num_epochs=100,
-                 model_type='lstm', tf_ratio=0.5):
+                 optimize='sgd', lr=0.25, weight_decay=0.0, clip_grad=0.1,
+                 lr_scheduler='fixed', min_lr=1e-4, num_epochs=100,
+                 model_type='lstm', tf_ratio=1):
         """Initialize EncDec."""
         Trainer.__init__(self)
         self.word_embdim = word_embdim
@@ -56,16 +57,14 @@ class EncDec(Trainer):
         self.lr = lr
         self.weight_decay = weight_decay
         self.clip_grad = clip_grad
-        self.reduce_on_plateau = reduce_on_plateau
-        self.multi_step_lr = multi_step_lr
+        self.lr_scheduler = lr_scheduler
+        self.min_lr = min_lr
         self.num_epochs = num_epochs
         self.model_type = model_type
         self.tf_ratio = tf_ratio
         self.max_sent_len = None
         self.reversed_in = None
 
-        assert (multi_step_lr and reduce_on_plateau) is not True, \
-            "Can only use one scheduler!"
         assert optimize in ['adam', 'sgd'], "optimize must be adam or sgd!"
 
         # Dataset attributes
@@ -80,8 +79,7 @@ class EncDec(Trainer):
         self.loss_func = None
         self.dict_args = None
         self.nn_epoch = 0
-        self.plateau_scheduler = None
-        self.multi_step_scheduler = None
+        self.scheduler = None
 
         # Save load attributes
         self.save_dir = None
@@ -136,13 +134,15 @@ class EncDec(Trainer):
                                        weight_decay=self.weight_decay,
                                        nesterov=True, momentum=0.99)
 
-        if self.reduce_on_plateau:
-            self.plateau_scheduler = ReduceLROnPlateau(
-                self.optimizer, patience=0, mode='max')
-
-        if self.multi_step_lr:
-            self.multi_step_scheduler = MultiStepLR(
+        if self.lr_scheduler == 'reduce_on_plateau':
+            self.scheduler = ReduceLROnPlateau(
+                self.optimizer, patience=0)
+        elif self.lr_scheduler == 'multi_step_lr':
+            self.scheduler = MultiStepLR(
                 self.optimizer, list(range(8, 20, 1)), 0.5)
+        elif self.lr_scheduler == 'fixed':
+            self.scheduler = StepLR(
+                self.optimizer, step_size=1, gamma=0.1)
 
         if self.USE_CUDA:
             self.model = self.model.cuda()
@@ -267,8 +267,8 @@ class EncDec(Trainer):
                Learning Rate: {}\n\
                Weight Decay: {}\n\
                Clip Grad: {}\n\
-               Reduce On Plateau: {}\n\
-               Multi Step LR: {}\n\
+               LR Scheduler: {}\n\
+               Min LR: {}\n\
                Model Type: {}\n\
                Teacher Forcing Ratio: {}\n\
                Save Dir: {}".format(
@@ -281,7 +281,7 @@ class EncDec(Trainer):
                    self.enc_dropout, self.dec_dropout,
                    self.attention, self.beam_width, self.batch_size,
                    self.optimize, self.lr, self.weight_decay, self.clip_grad,
-                   self.reduce_on_plateau, self.multi_step_lr, self.model_type,
+                   self.lr_scheduler, self.min_lr, self.model_type,
                    self.tf_ratio, save_dir), flush=True)
 
         # initialize dataset attributes
@@ -341,10 +341,11 @@ class EncDec(Trainer):
                     val_score, correct, total, precisions, brevity_penalty, \
                         sys_len, ref_len = self.score(val_score_loader)
 
-                    if self.reduce_on_plateau:
-                        self.plateau_scheduler.step(val_loss)
-                    if self.multi_step_lr:
-                        self.multi_step_scheduler.step()
+                    if self.scheduler.get_lr()[-1] > self.min_lr:
+                        if self.lr_scheduler == 'reduce_on_plateau':
+                            self.scheduler.step(val_loss)
+                        else:
+                            self.scheduler.step()
 
                     if val_score > self.best_score:
                         self.best_score = val_score
@@ -440,7 +441,7 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_rp_{}_ms_{}_mt_{}_tf_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_ls_{}_ml_{}_mt_{}_tf_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.reversed_in, self.enc_hidden_dim,
@@ -448,7 +449,7 @@ class EncDec(Trainer):
                        self.dec_num_layers, self.enc_dropout, self.dec_dropout,
                        self.attention, self.beam_width, self.optimize, self.lr,
                        self.weight_decay, self.clip_grad,
-                       self.reduce_on_plateau, self.multi_step_lr,
+                       self.lr_scheduler, self.min_lr,
                        self.model_type, self.tf_ratio)
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
