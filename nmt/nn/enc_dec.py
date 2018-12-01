@@ -133,11 +133,12 @@ class EncDec(Trainer):
                                         weight_decay=self.weight_decay)
         elif self.optimize == 'sgd':
             self.optimizer = optim.SGD(self.model.parameters(), self.lr,
-                                       weight_decay=self.weight_decay)
+                                       weight_decay=self.weight_decay,
+                                       nesterov=True, momentum=0.99)
 
         if self.reduce_on_plateau:
             self.plateau_scheduler = ReduceLROnPlateau(
-                self.optimizer, patience=10, mode='max')
+                self.optimizer, patience=0, mode='max')
 
         if self.multi_step_lr:
             self.multi_step_scheduler = MultiStepLR(
