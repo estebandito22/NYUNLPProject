@@ -86,7 +86,7 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
         word_embeddings = (None, None)
 
     train_dataset = NMTDataset(
-        data['train.'+source_lang][:10], data['train.en'][:10],
+        data['train.'+source_lang], data['train.en'],
         data['id2token.'+source_lang], data['id2token.en'],
         data['token2id.'+source_lang], data['token2id.en'],
         max_sent_len, reversed_in)
