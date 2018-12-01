@@ -27,6 +27,8 @@ class BidirectionalEncoder(nn.Module):
         self.dropout = dict_args["dropout"]
         self.batch_size = dict_args["batch_size"]
         self.model_type = dict_args["model_type"]
+        self.dropout_in = dict_args["dropout_in"]
+        self.dropout_out = dict_args["dropout_out"]
 
         # GRU
         if self.model_type == 'gru':
@@ -51,6 +53,9 @@ class BidirectionalEncoder(nn.Module):
                      'word_embeddings': self.word_embeddings,
                      'vocab_size': self.vocab_size}
         self.source_word_embd = WordEmbeddings(dict_args)
+
+        self.drop_in = nn.Dropout(p=self.dropout_in)
+        self.drop_out = nn.Dropout(p=self.dropout_out)
 
         # initialize weights
         # following https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf
@@ -104,6 +109,7 @@ class BidirectionalEncoder(nn.Module):
         """Forward pass."""
         # seqlen x batch x embedding dim
         seq_word_embds = self.source_word_embd(seq_word_indexes)
+        seq_word_embds = self.drop_in(seq_word_embds)
 
         seqlen, batch_size, _ = seq_word_embds.size()
         seq_lengths, orig2sorted = seq_lengths.sort(0, descending=True)
@@ -119,6 +125,7 @@ class BidirectionalEncoder(nn.Module):
         out = pad_packed_sequence(out, total_length=seqlen)
         # seqlen x batch size x num_directions * hidden size
         out = out[0][:, sorted2orig, :]
+        out = self.drop_out(out)
 
         # numlayers * num directions x batch size x hidden size
         h_n = h_n[:, sorted2orig, :]

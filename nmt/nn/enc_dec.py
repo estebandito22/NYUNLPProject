@@ -29,7 +29,8 @@ class EncDec(Trainer):
                  enc_vocab_size=50000, dec_vocab_size=50000, bos_idx=2,
                  eos_idx=3, pad_idx=1, enc_hidden_dim=256, dec_hidden_dim=256,
                  enc_num_layers=1, dec_num_layers=1, enc_dropout=0.0, kernel_size=0,
-                 dec_dropout=0.0, attention=False, beam_width=1, batch_size=64,
+                 dec_dropout=0.0, dropout_in=0.1, dropout_out=0.1,
+                 attention=False, beam_width=1, batch_size=64,
                  optimize='sgd', lr=0.25, weight_decay=0.0, clip_grad=0.1,
                  lr_scheduler='fixed', min_lr=1e-4, num_epochs=100,
                  model_type='lstm', tf_ratio=1):
@@ -48,6 +49,8 @@ class EncDec(Trainer):
         self.dec_num_layers = dec_num_layers
         self.enc_dropout = enc_dropout
         self.dec_dropout = dec_dropout
+        self.dropout_in = dropout_in
+        self.dropout_out = dropout_out
         self.kernel_size = kernel_size
         self.batch_size = batch_size
         self.attention = attention
@@ -111,6 +114,8 @@ class EncDec(Trainer):
                           'dec_num_layers': self.dec_num_layers,
                           'enc_dropout': self.enc_dropout,
                           'dec_dropout': self.dec_dropout,
+                          'dropout_in': self.dropout_in,
+                          'dropout_out': self.dropout_out,
                           'kernel_size': self.kernel_size,
                           'enc_vocab_size': self.enc_vocab_size,
                           'dec_vocab_size': self.dec_vocab_size,
@@ -260,6 +265,8 @@ class EncDec(Trainer):
                Decoder Num Layers: {}\n\
                Encoder Dropout: {}\n\
                Decoder Dropout: {}\n\
+               Dropout Inputs: {}\n\
+               Dropout Outputs: {}\n\
                Attention: {}\n\
                Beam Width: {}\n\
                Batch Size: {}\n\
@@ -279,6 +286,7 @@ class EncDec(Trainer):
                    self.enc_hidden_dim, self.dec_hidden_dim,
                    self.enc_num_layers, self.dec_num_layers,
                    self.enc_dropout, self.dec_dropout,
+                   self.dropout_in, self.dropout_out,
                    self.attention, self.beam_width, self.batch_size,
                    self.optimize, self.lr, self.weight_decay, self.clip_grad,
                    self.lr_scheduler, self.min_lr, self.model_type,
@@ -441,12 +449,13 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_ls_{}_ml_{}_mt_{}_tf_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_di_{}_do_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_ls_{}_ml_{}_mt_{}_tf_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.reversed_in, self.enc_hidden_dim,
                        self.dec_hidden_dim, self.enc_num_layers,
                        self.dec_num_layers, self.enc_dropout, self.dec_dropout,
+                       self.dropout_in, self.dropout_out,
                        self.attention, self.beam_width, self.optimize, self.lr,
                        self.weight_decay, self.clip_grad,
                        self.lr_scheduler, self.min_lr,

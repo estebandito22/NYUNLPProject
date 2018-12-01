@@ -27,6 +27,8 @@ class RecurrentDecoder(nn.Module):
         self.word_embeddings = dict_args["word_embeddings"]
         self.num_layers = dict_args["num_layers"]
         self.dropout = dict_args["dropout"]
+        self.dropout_in = dict_args["dropout_in"]
+        self.dropout_out = dict_args["dropout_out"]
         self.vocab_size = dict_args["vocab_size"]
         self.max_sent_len = dict_args["max_sent_len"]
         self.hidden_size = dict_args["hidden_size"]
@@ -109,6 +111,9 @@ class RecurrentDecoder(nn.Module):
                      'vocab_size': self.vocab_size}
         self.target_word_embd = WordEmbeddings(dict_args)
 
+        self.drop_in = nn.Dropout(p=self.dropout_in)
+        self.drop_out = nn.Dropout(p=self.dropout_out)
+
         # initialize weights
         # following https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf
         for name, param in self.rnn.named_parameters():
@@ -120,6 +125,7 @@ class RecurrentDecoder(nn.Module):
         """Forward pass."""
         # seqlen x batch size x embedding dim
         seq_word_embds = self.target_word_embd(seq_word_indexes)
+        seq_word_embds = self.drop_in(seq_word_embds)
 
         # init output tensor
         seqlen, batch_size, _ = seq_word_embds.size()
@@ -166,6 +172,7 @@ class RecurrentDecoder(nn.Module):
         output, _ = self.rnn(context_input, self.hidden)
         output = pad_packed_sequence(output, total_length=seqlen)
         output = output[0][:, sorted2orig, :]
+        output = self.drop_out(output)
 
         for i in range(seqlen):
             log_probs[i] = F.log_softmax(self.hidden2vocab(output[i]), dim=1)

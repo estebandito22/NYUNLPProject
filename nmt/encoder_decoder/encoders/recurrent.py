@@ -26,7 +26,8 @@ class RecurrentEncoder(nn.Module):
         self.num_layers = dict_args["num_layers"]
         self.dropout = dict_args["dropout"]
         self.batch_size = dict_args["batch_size"]
-        self.model_type = dict_args['model_type']
+        self.model_type = dict_args["model_type"]
+        self.dropout_in = dict_args["dropout_in"]
 
         # GRU
         if self.model_type == 'gru':
@@ -51,6 +52,8 @@ class RecurrentEncoder(nn.Module):
                      'word_embeddings': self.word_embeddings,
                      'vocab_size': self.vocab_size}
         self.source_word_embd = WordEmbeddings(dict_args)
+
+        self.drop_in = nn.Dropout(p=self.dropout_in)
 
         # initialize weights
         # following https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf
@@ -104,6 +107,7 @@ class RecurrentEncoder(nn.Module):
         """Forward pass."""
         # seqlen x batch x embedding dim
         seq_word_embds = self.source_word_embd(seq_word_indexes)
+        seq_word_embds = self.drop_in(seq_word_embds)
 
         _, batch_size, _ = seq_word_embds.size()
         seq_lengths, orig2sorted = seq_lengths.sort(0, descending=True)

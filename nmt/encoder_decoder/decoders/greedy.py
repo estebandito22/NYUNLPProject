@@ -31,6 +31,8 @@ class GreedyDecoder(RecurrentDecoder):
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
         self.model_type = dict_args["model_type"]
+        self.dropout_in = dict_args["dropout_in"]
+        self.dropout_out = dict_args["dropout_out"]
 
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
                      'enc_num_layers': self.enc_num_layers,
@@ -38,6 +40,8 @@ class GreedyDecoder(RecurrentDecoder):
                      'word_embeddings': self.word_embeddings,
                      'num_layers': self.num_layers,
                      'dropout': self.dropout,
+                     'dropout_in': self.dropout_in,
+                     'dropout_out': self.dropout_out,
                      'vocab_size': self.vocab_size,
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.hidden_size,
@@ -79,6 +83,7 @@ class GreedyDecoder(RecurrentDecoder):
             start_idx = start_idx.cuda()
 
         i_t = self.target_word_embd(start_idx)
+        i_t = self.drop_in(i_t)
         eos = False
         i = 0
         while eos is False and i < self.max_sent_len * 2:
@@ -97,6 +102,7 @@ class GreedyDecoder(RecurrentDecoder):
             out_seq_attentions += [attentions.squeeze()]
             context_input = torch.cat([i_t, context], dim=2)
             output, self.hidden = self.rnn(context_input, self.hidden)
+            output = self.drop_out(output)
             log_probs = F.log_softmax(self.hidden2vocab(output[0]), dim=1)
             seq_index = log_probs.argmax(dim=1)
 
@@ -105,6 +111,7 @@ class GreedyDecoder(RecurrentDecoder):
             else:
                 out_seq_indexes.append(seq_index)
                 i_t = self.target_word_embd(seq_index.unsqueeze(0))
+                i_t = self.drop_in(i_t)
 
             i += 1
 

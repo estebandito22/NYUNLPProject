@@ -10,10 +10,10 @@ from nmt.nn.enc_dec import EncDec
 
 
 def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
-         enc_num_layers, dec_num_layers, enc_dropout, dec_dropout, attention,
-         kernel_size, beam_width, batch_size, optimize, lr, weight_decay, clip_grad,
-         lr_scheduler, min_lr, reversed_in, source_lang,
-         num_epochs, model_type, tf_ratio, save_dir):
+         enc_num_layers, dec_num_layers, enc_dropout, dec_dropout, dropout_in,
+         dropout_out, attention, kernel_size, beam_width, batch_size, optimize,
+         lr, weight_decay, clip_grad, lr_scheduler, min_lr, reversed_in,
+         source_lang, num_epochs, model_type, tf_ratio, save_dir):
 
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
@@ -109,6 +109,8 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
                     dec_num_layers=dec_num_layers,
                     enc_dropout=enc_dropout,
                     dec_dropout=dec_dropout,
+                    dropout_in=dropout_in,
+                    dropout_out=dropout_out,
                     kernel_size=kernel_size,
                     attention=attention,
                     beam_width=beam_width,
@@ -144,6 +146,10 @@ if __name__ == '__main__':
                     help="Dropout in encoder.  NoOp if num_layers=1.")
     ap.add_argument("-ddo", "--dec_dropout", default=0.0, type=float,
                     help="Dropout in decoder.  NoOp if num_layers=1.")
+    ap.add_argument("-di", "--dropout_in", default=0.1, type=float,
+                    help="Dropout on encoded inputs.")
+    ap.add_argument("-do", "--dropout_out", default=0.1, type=float,
+                    help="Dropout on rnn outputs.")
     ap.add_argument("-ke", "--kernel_size", default=0, type=int,
                     help="Use a convolutional encoder instead of RNN with specified kernel size.")
     ap.add_argument("-at", "--attention", default=False, action='store_true',
@@ -186,6 +192,8 @@ if __name__ == '__main__':
          args["dec_num_layers"],
          args["enc_dropout"],
          args["dec_dropout"],
+         args["dropout_in"],
+         args["dropout_out"],
          args["attention"],
          args["kernel_size"],
          args["beam_width"],
