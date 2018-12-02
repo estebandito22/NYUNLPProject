@@ -2,23 +2,23 @@
 
 import torch
 from torch import nn
-from torch.nn.utils.rnn import pack_padded_sequence
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 
 
-class RecurrentEncoder(nn.Module):
+class BidirectionalEncoder(nn.Module):
 
-    """Recurrent network to encode sentence."""
+    """Bidirectional recurrent network to encode sentence."""
 
     def __init__(self, dict_args):
         """
-        Initialize RecurrentEncoder.
+        Initialize BidirectionalEncoder.
 
         Args
             dict_args: dictionary containing the following keys:
         """
-        super(RecurrentEncoder, self).__init__()
+        super(BidirectionalEncoder, self).__init__()
         self.word_embdim = dict_args["word_embdim"]
         self.word_embeddings = dict_args["word_embeddings"]
         self.vocab_size = dict_args["vocab_size"]
@@ -28,6 +28,7 @@ class RecurrentEncoder(nn.Module):
         self.batch_size = dict_args["batch_size"]
         self.model_type = dict_args["model_type"]
         self.dropout_in = dict_args["dropout_in"]
+        self.dropout_out = dict_args["dropout_out"]
 
         # GRU
         if self.model_type == 'gru':
@@ -37,7 +38,7 @@ class RecurrentEncoder(nn.Module):
             self.rnn = nn.GRU(
                 input_size=self.word_embdim, hidden_size=self.hidden_size,
                 num_layers=self.num_layers, dropout=self.dropout,
-                bidirectional=False)
+                bidirectional=True)
         elif self.model_type == 'lstm':
             self.hidden = (None, None)
             self.init_hidden(self.batch_size)
@@ -45,7 +46,7 @@ class RecurrentEncoder(nn.Module):
             self.rnn = nn.LSTM(
                 input_size=self.word_embdim, hidden_size=self.hidden_size,
                 num_layers=self.num_layers, dropout=self.dropout,
-                bidirectional=False)
+                bidirectional=True)
 
         # word embd
         dict_args = {'word_embdim': self.word_embdim,
@@ -54,6 +55,7 @@ class RecurrentEncoder(nn.Module):
         self.source_word_embd = WordEmbeddings(dict_args)
 
         self.drop_in = nn.Dropout(p=self.dropout_in)
+        self.drop_out = nn.Dropout(p=self.dropout_out)
 
         # initialize weights
         # following https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf
@@ -66,16 +68,16 @@ class RecurrentEncoder(nn.Module):
 
         if self.model_type == 'gru':
             hidden = torch.zeros(
-                self.num_layers, batch_size, self.hidden_size)
+                self.num_layers * 2, batch_size, self.hidden_size)
             if torch.cuda.is_available():
                 hidden = hidden.cuda()
             self.hidden = hidden
 
         elif self.model_type == 'lstm':
             hidden1 = torch.zeros(
-                self.num_layers, batch_size, self.hidden_size)
+                self.num_layers * 2, batch_size, self.hidden_size)
             hidden2 = torch.zeros(
-                self.num_layers, batch_size, self.hidden_size)
+                self.num_layers * 2, batch_size, self.hidden_size)
             if torch.cuda.is_available():
                 hidden1 = hidden1.cuda()
                 hidden2 = hidden2.cuda()
@@ -109,20 +111,31 @@ class RecurrentEncoder(nn.Module):
         seq_word_embds = self.source_word_embd(seq_word_indexes)
         seq_word_embds = self.drop_in(seq_word_embds)
 
-        _, batch_size, _ = seq_word_embds.size()
+        seqlen, batch_size, _ = seq_word_embds.size()
         seq_lengths, orig2sorted = seq_lengths.sort(0, descending=True)
         _, sorted2orig = orig2sorted.sort(0, descending=False)
         seq_word_embds = seq_word_embds[:, orig2sorted, :]
         seq_word_embds = pack_padded_sequence(seq_word_embds, seq_lengths)
 
         if self.model_type == 'gru':
-            _, h_n = self.rnn(seq_word_embds, self.hidden)
+            out, h_n = self.rnn(seq_word_embds, self.hidden)
         elif self.model_type == 'lstm':
-            _, (h_n, _) = self.rnn(seq_word_embds, self.hidden)
+            out, (h_n, c_t) = self.rnn(seq_word_embds, self.hidden)
 
-        # numlayers * num directions x batch size x hidden size
+        out = pad_packed_sequence(out, total_length=seqlen)
+        # seqlen x batch size x num_directions * hidden size
+        out = out[0][:, sorted2orig, :]
+        out = self.drop_out(out)
+
+        # resort
         h_n = h_n[:, sorted2orig, :]
-        h_n = h_n.permute(1, 0, 2).contiguous().view(batch_size, -1)
-        # batch size x hidden size + numlayers * num directions
+        c_t = c_t[:, sorted2orig, :]
 
-        return h_n, h_n
+        # combine directions num_layers x batch_size x num_directions * hidden_size
+        h_n = h_n.view(self.num_layers, 2, batch_size, -1).transpose(1, 2).contiguous().view(self.num_layers, batch_size, -1)
+        if self.model_type == 'lstm':
+            c_t = c_t[:, sorted2orig, :]
+            c_t = c_t.view(self.num_layers, 2, batch_size, -1).transpose(1, 2).contiguous().view(self.num_layers, batch_size, -1)
+            return out, (h_n, c_t)
+
+        return out, h_n

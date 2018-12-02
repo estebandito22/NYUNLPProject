@@ -68,6 +68,8 @@ class EncDec(Trainer):
         self.max_sent_len = None
         self.reversed_in = None
 
+        assert self.enc_num_layers == self.dec_num_layers, \
+            "encoder and deconder must have same number of layers"
         assert optimize in ['adam', 'sgd'], "optimize must be adam or sgd!"
 
         # Dataset attributes
@@ -141,7 +143,7 @@ class EncDec(Trainer):
 
         if self.lr_scheduler == 'reduce_on_plateau':
             self.scheduler = ReduceLROnPlateau(
-                self.optimizer, patience=0)
+                self.optimizer, patience=0, min_lr=self.min_lr)
         elif self.lr_scheduler == 'multi_step_lr':
             self.scheduler = MultiStepLR(
                 self.optimizer, list(range(8, 20, 1)), 0.5)
@@ -241,6 +243,18 @@ class EncDec(Trainer):
 
             eval_loss /= samples_processed
 
+            random.seed(self.nn_epoch)
+            i = random.randint(1, 50) * -1
+            sent = log_probs[i].argmax(dim=0)
+            pred = [' '.join([loader.dataset.y_id2token[idx]
+                      for idx in sent])]
+            # removes bos, eos and pad
+            truth = [' '.join([loader.dataset.y_id2token[idx]
+                      for idx in y[i].cpu().tolist() if idx != 0][:-1])]
+            ref = [' '.join([loader.dataset.X_id2token[idx]
+                      for idx in X[i].cpu().tolist() if idx != 0][1:-1])]
+            print("Prediction during eval\nPred: \n{}\nTruth: \n{}\nRef: \n{}".format(pred[0], truth[0], ref[0]))
+
         return samples_processed, eval_loss
 
     def fit(self, train_dataset, val_dataset, save_dir):
@@ -305,18 +319,13 @@ class EncDec(Trainer):
 
         train_loader = DataLoader(
             self.train_data, batch_size=self.batch_size, shuffle=True,
-            num_workers=4)
+            num_workers=1)
         val_loader = DataLoader(
-            self.val_data, batch_size=self.batch_size, shuffle=True,
-            num_workers=4)
-
+            self.val_data, batch_size=self.batch_size, shuffle=False,
+            num_workers=1)
         val_score_loader = DataLoader(
             self.val_data, batch_size=1, shuffle=False,
             num_workers=1)
-
-        # train_score_loader = DataLoader(
-        #     self.train_data, batch_size=1, shuffle=False,
-        #     num_workers=1)
 
         self._init_nn()
 
@@ -349,11 +358,11 @@ class EncDec(Trainer):
                     val_score, correct, total, precisions, brevity_penalty, \
                         sys_len, ref_len = self.score(val_score_loader)
 
-                    if self.scheduler.get_lr()[-1] > self.min_lr:
-                        if self.lr_scheduler == 'reduce_on_plateau':
-                            self.scheduler.step(val_loss)
-                        else:
-                            self.scheduler.step()
+
+                    if self.lr_scheduler == 'reduce_on_plateau':
+                        self.scheduler.step(val_loss)
+                    elif self.scheduler.get_lr()[-1] > self.min_lr:
+                        self.scheduler.step()
 
                     if val_score > self.best_score:
                         self.best_score = val_score
@@ -382,6 +391,7 @@ class EncDec(Trainer):
         self.model.eval()
         preds = []
         truth = []
+        ref = []
         attn = []
 
         with torch.no_grad():
@@ -407,17 +417,23 @@ class EncDec(Trainer):
                 # removes bos, eos and pad
                 truth += [' '.join([loader.dataset.y_id2token[idx]
                           for idx in y.cpu().tolist()[0] if idx != 0][1:-1])]
+                ref += [' '.join([loader.dataset.X_id2token[idx]
+                          for idx in X.cpu().tolist()[0] if idx != 0][1:-1])]
                 # list of all attention matricies
                 attn += [attentions]
 
-        return preds, truth, attn
+        return preds, truth, ref, attn
 
     def score(self, loader, scorer='bleu'):
         """Score model."""
-        preds, truth, _ = self.predict(loader)
+        preds, truth, ref, _ = self.predict(loader)
         idx = random.randint(0, len(loader.dataset))
+        random.seed(self.nn_epoch)
+        idx = random.randint(1, 50) * -1
+        print("Prediction during decoding:\n")
         print("Preds\n", preds[idx])
         print("Truth\n", truth[idx])
+        print("Ref\n", ref[idx])
 
         if scorer == 'perplexity':
             # score = perplexity_score(truth, index_sequences)
@@ -436,7 +452,7 @@ class EncDec(Trainer):
             subset = Subset(dataset, subset_batch_indexes)
             loader = DataLoader(
                 subset, batch_size=self.batch_size, shuffle=True,
-                num_workers=multiprocessing.cpu_count())
+                num_workers=1)
             loaders += [loader]
         return loaders
 

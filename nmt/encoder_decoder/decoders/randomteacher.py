@@ -25,6 +25,8 @@ class RandomTeacherDecoder(RecurrentDecoder):
         self.word_embeddings = dict_args["word_embeddings"]
         self.num_layers = dict_args["num_layers"]
         self.dropout = dict_args["dropout"]
+        self.dropout_in = dict_args["dropout_in"]
+        self.dropout_out = dict_args["dropout_out"]
         self.vocab_size = dict_args["vocab_size"]
         self.max_sent_len = dict_args["max_sent_len"]
         self.hidden_size = dict_args["hidden_size"]
@@ -41,6 +43,8 @@ class RandomTeacherDecoder(RecurrentDecoder):
                      'word_embeddings': self.word_embeddings,
                      'num_layers': self.num_layers,
                      'dropout': self.dropout,
+                     'dropout_in': self.dropout_in,
+                     'dropout_out': self.dropout_out,
                      'vocab_size': self.vocab_size,
                      'max_sent_len': self.max_sent_len,
                      'hidden_size': self.hidden_size,
@@ -50,7 +54,7 @@ class RandomTeacherDecoder(RecurrentDecoder):
         RecurrentDecoder.__init__(self, dict_args)
 
     def forward(self, seq_word_indexes, seq_lengths,
-                seq_enc_states, seq_enc_hidden):
+                seq_enc_states, enc_padding_mask, seq_enc_hidden):
         """Forward pass."""
         # get target word embeddings
         seq_word_embds = self.target_word_embd(seq_word_indexes)
@@ -73,9 +77,9 @@ class RandomTeacherDecoder(RecurrentDecoder):
             self.hidden = (hidden1, hidden2)
 
         # prep encoder states once for attention
-        if self.attention:
-            # batch_size x enc_hidden_dim x seqlen
-            seq_enc_states = seq_enc_states.permute(1, 2, 0)
+        # if self.attention:
+        #     # batch_size x enc_hidden_dim x seqlen
+        #     seq_enc_states = seq_enc_states.permute(1, 2, 0)
 
         use_tf = True if random.random() < self.tf_ratio else False
         if not use_tf:
@@ -85,6 +89,7 @@ class RandomTeacherDecoder(RecurrentDecoder):
             if torch.cuda.is_available():
                 start_idx = start_idx.cuda()
             i_t = self.target_word_embd(start_idx)
+            i_t = self.drop_in(i_t)
 
             for i in range(seqlen):
 
@@ -96,20 +101,24 @@ class RandomTeacherDecoder(RecurrentDecoder):
                         hidden = self.hidden[0]
 
                     context, _ = self.attn_layer(
-                        1, hidden.view(1, batch_size, -1), seq_enc_states)
+                        1, hidden.view(batch_size, -1), seq_enc_states,
+                        enc_padding_mask)
                 else:
                     context = seq_enc_states.unsqueeze(0)
 
                 context_input = torch.cat([i_t, context], dim=2)
                 output, self.hidden = self.rnn(context_input, self.hidden)
+                output = self.drop_out(output)
                 log_probs[i] = F.log_softmax(self.hidden2vocab(output[0]), dim=1)
                 seq_index = log_probs[i].argmax(dim=1).detach() # detach from history as input
 
                 i_t = self.target_word_embd(seq_index.unsqueeze(1))
+                i_t = self.drop_in(i_t)
 
         else:
             for i in range(seqlen):
                 i_t = seq_word_embds[i].unsqueeze(0)
+                i_t = self.drop_in(i_t)
 
                 # perform attention at time step
                 if self.attention:
@@ -119,7 +128,8 @@ class RandomTeacherDecoder(RecurrentDecoder):
                         hidden = self.hidden[0]
 
                     context, _ = self.attn_layer(
-                        1, hidden.view(1, batch_size, -1), seq_enc_states)
+                        1, hidden.view(batch_size, -1), seq_enc_states,
+                        enc_padding_mask)
                 else:
                     context = seq_enc_states.unsqueeze(0)
 

@@ -68,9 +68,9 @@ class GreedyDecoder(RecurrentDecoder):
                     self.num_layers, 1, self.hidden_size)
             self.hidden = (hidden1, hidden2)
 
-        if self.attention:
-            # 1 x enc_hidden_dim x seqlen
-            seq_enc_states = seq_enc_states.permute(1, 2, 0)
+        # if self.attention:
+        #     # 1 x enc_hidden_dim x seqlen
+        #     seq_enc_states = seq_enc_states.permute(1, 2, 0)
 
         # init output tensor
         out_seq_indexes = []
@@ -95,7 +95,7 @@ class GreedyDecoder(RecurrentDecoder):
                     hidden = self.hidden[0]
 
                 context, attentions = self.attn_layer(
-                    1, hidden.view(1, 1, -1), seq_enc_states, enc_padding_mask)
+                    1, hidden.view(1, -1), seq_enc_states, enc_padding_mask)
             else:
                 context = seq_enc_states.view(1, 1, -1)
 

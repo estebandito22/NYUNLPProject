@@ -59,9 +59,9 @@ class BidirectionalEncoder(nn.Module):
 
         # initialize weights
         # following https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf
-        for name, param in self.rnn.named_parameters():
-            if name.find("weight") > -1:
-                nn.init.uniform_(param, -0.1, 0.1)
+        # for name, param in self.rnn.named_parameters():
+        #     if name.find("weight") > -1:
+        #         nn.init.uniform_(param, -0.1, 0.1)
 
     def init_hidden(self, batch_size):
         """Initialize the hidden state of the RNN."""

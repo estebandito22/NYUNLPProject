@@ -5,7 +5,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from nmt.encoder_decoder.decoders.attention import AttentionMechanism
+from nmt.encoder_decoder.decoders.attention2 import AttentionMechanism
 from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 
 
@@ -116,9 +116,9 @@ class RecurrentDecoder(nn.Module):
 
         # initialize weights
         # following https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf
-        for name, param in self.rnn.named_parameters():
-            if name.find("weight") > -1:
-                nn.init.uniform_(param, -0.1, 0.1)
+        # for name, param in self.rnn.named_parameters():
+        #     if name.find("weight") > -1:
+        #         nn.init.uniform_(param, -0.1, 0.1)
 
     def forward(self, seq_word_indexes, seq_lengths,
                 seq_enc_states, enc_padding_mask, seq_enc_hidden):
@@ -145,8 +145,8 @@ class RecurrentDecoder(nn.Module):
             self.hidden = (hidden1, hidden2)
 
         if self.attention:
-            # batch_size x enc_hidden_dim x seqlen
-            seq_enc_states = seq_enc_states.permute(1, 2, 0)
+            # # batch_size x enc_hidden_dim x seqlen
+            # seq_enc_states = seq_enc_states.permute(1, 2, 0)
 
             if self.model_type == 'gru':
                 hidden = self.hidden
@@ -154,7 +154,7 @@ class RecurrentDecoder(nn.Module):
                 hidden = self.hidden[0]
 
             context, _ = self.attn_layer(
-                seqlen, hidden.view(1, batch_size, -1),
+                seqlen, hidden.view(batch_size, -1),
                 seq_enc_states, enc_padding_mask)
         else:
             # seqlen

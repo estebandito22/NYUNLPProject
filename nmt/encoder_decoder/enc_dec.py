@@ -4,13 +4,16 @@ from torch import nn
 
 from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 
-from nmt.encoder_decoder.encoders.recurrent import RecurrentEncoder
-from nmt.encoder_decoder.encoders.bidirectional import BidirectionalEncoder
+from nmt.encoder_decoder.encoders.fairseqrecurrent import RecurrentEncoder
+from nmt.encoder_decoder.encoders.fairseqbidirectional import BidirectionalEncoder
 from nmt.encoder_decoder.encoders.convolutional import ConvolutionalEncoder
 
 from nmt.encoder_decoder.decoders.recurrent import RecurrentDecoder
 from nmt.encoder_decoder.decoders.randomteacher import RandomTeacherDecoder
+from nmt.encoder_decoder.decoders.fairseq import FairseqDecoder
 from nmt.encoder_decoder.decoders.greedy import GreedyDecoder
+from nmt.encoder_decoder.decoders.fairseqgreedy import FairseqGreedyDecoder
+from nmt.encoder_decoder.decoders.fairseqbeamsearch import FairseqBeamDecoder
 from nmt.encoder_decoder.decoders.beamsearch import BeamDecoder
 # from nmt.encoder_decoder.decoders.beamsearch import BeamDecoder
 
@@ -93,8 +96,9 @@ class EncDecNMT(nn.Module):
                      'eos_idx': self.eos_idx,
                      'model_type': self.model_type,
                      'tf_ratio': self.tf_ratio}
-        self.decoder = RecurrentDecoder(dict_args)
+        # self.decoder = RecurrentDecoder(dict_args)
         # self.decoder = RandomTeacherDecoder(dict_args)
+        self.decoder = FairseqDecoder(dict_args)
 
         # inference decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
@@ -112,29 +116,32 @@ class EncDecNMT(nn.Module):
                      'attention': self.attention,
                      'bos_idx': self.bos_idx,
                      'eos_idx': self.eos_idx,
-                     'model_type': self.model_type}
+                     'model_type': self.model_type,
+                     'tf_ratio': self.tf_ratio}
 
         # self.inference_decoder = BeamDecoder(dict_args)
-        self.inference_decoder = GreedyDecoder(dict_args)
+        # self.inference_decoder = GreedyDecoder(dict_args)
+        # self.inference_decoder = FairseqGreedyDecoder(dict_args)
+        self.inference_decoder = FairseqBeamDecoder(dict_args)
 
     def forward(self, source_indexseq, s_lengths,
                 target_indexseq=None, t_lengths=None, inference=False):
         """Forward pass."""
         batch_size = source_indexseq.size()[0]
         # batch_size x maxseqlen
-        encoder_padding_mask = source_indexseq.eq(self.pad_idx).unsqueeze(2)
+        encoder_padding_mask = source_indexseq.eq(self.pad_idx).t()
 
         # self.encoder.detach_hidden(batch_size)
         self.encoder.init_hidden(batch_size)
         source_seq_enc_states, z0 = self.encoder(source_indexseq, s_lengths)
 
         if inference:
-            # seq_indexes = self.inference_decoder(
-            #     source_seq_enc_states, encoder_padding_mask, z0,
-            #     self.decoder.state_dict(), self.beam_width)
             seq_indexes = self.inference_decoder(
                 source_seq_enc_states, encoder_padding_mask, z0,
-                self.decoder.state_dict())
+                self.decoder.state_dict(), self.beam_width)
+            # seq_indexes = self.inference_decoder(
+            #     source_seq_enc_states, encoder_padding_mask, z0,
+            #     self.decoder.state_dict())
 
             return seq_indexes
 

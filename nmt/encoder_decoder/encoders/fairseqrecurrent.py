@@ -118,11 +118,17 @@ class RecurrentEncoder(nn.Module):
         if self.model_type == 'gru':
             _, h_n = self.rnn(seq_word_embds, self.hidden)
         elif self.model_type == 'lstm':
-            _, (h_n, _) = self.rnn(seq_word_embds, self.hidden)
+            _, (h_n, c_t) = self.rnn(seq_word_embds, self.hidden)
 
-        # numlayers * num directions x batch size x hidden size
+        # resort
         h_n = h_n[:, sorted2orig, :]
-        h_n = h_n.permute(1, 0, 2).contiguous().view(batch_size, -1)
-        # batch size x hidden size + numlayers * num directions
+        c_t = c_t[:, sorted2orig, :]
+
+        # combine directions num_layers x batch_size x num_directions * hidden_size
+        h_n = h_n.view(self.num_layers, 1, batch_size, -1).transpose(1, 2).contiguous().view(self.num_layers, batch_size, -1)
+        if self.model_type == 'lstm':
+            c_t = c_t[:, sorted2orig, :]
+            c_t = c_t.view(self.num_layers, 1, batch_size, -1).transpose(1, 2).contiguous().view(self.num_layers, batch_size, -1)
+            return h_n, (h_n, c_t)
 
         return h_n, h_n
