@@ -152,12 +152,11 @@ class FairseqBeamDecoder(FairseqDecoder):
                     # apply attention using the last layer's hidden state
                     if self.attention:
                         out, attn_scores[:, j, :] = self.attn_layer(hidden, seq_enc_states, enc_padding_mask)
+                        context = out
                     else:
                         out = hidden
+                        context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(1, -1))
                     out = self.drop_out(out)
-
-                    # build the context for next time step
-                    context = out
 
                     # Perform beam search
                     log_probs = F.log_softmax(self.hidden2vocab(out), dim=1)

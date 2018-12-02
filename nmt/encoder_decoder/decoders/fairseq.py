@@ -73,13 +73,18 @@ class FairseqDecoder(nn.Module):
         # attention
         if self.attention:
             dict_args = {'context_size': self.max_sent_len,
-                         'context_dim': self.enc_hidden_dim * 2,
+                         'context_dim': self.enc_hidden_dim * self.enc_num_directions,
                          'hidden_size': self.hidden_size}
             self.attn_layer = AttentionMechanism(dict_args)
+        else:
+            self.context_proj = nn.Linear(self.enc_hidden_dim * self.enc_num_layers, self.enc_hidden_dim)
 
         # mlp output
         # self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
-        self.hidden2vocab = nn.Linear(self.enc_hidden_dim * self.enc_num_directions, self.vocab_size)
+        if self.attention:
+            self.hidden2vocab = nn.Linear(self.enc_hidden_dim * self.enc_num_directions , self.vocab_size)
+        else:
+            self.hidden2vocab = nn.Linear(self.hidden_size , self.vocab_size)
 
         # target embeddings
         dict_args = {'word_embdim': self.word_embdim,
@@ -145,12 +150,11 @@ class FairseqDecoder(nn.Module):
                 # apply attention using the last layer's hidden state
                 if self.attention:
                     out, attn_scores[:, j, :] = self.attn_layer(hidden, seq_enc_states, enc_padding_mask)
+                    context = out
                 else:
                     out = hidden
+                    context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(batch_size, -1))
                 out = self.drop_out(out)
-
-                # context for next time step
-                context = out
 
                 # input for next time step
                 log_prob = F.log_softmax(self.hidden2vocab(out), dim=1)
@@ -184,12 +188,11 @@ class FairseqDecoder(nn.Module):
                 # apply attention using the last layer's hidden state
                 if self.attention:
                     out, attn_scores[:, j, :] = self.attn_layer(hidden, seq_enc_states, enc_padding_mask)
+                    context = out
                 else:
                     out = hidden
+                    context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(batch_size, -1))
                 out = self.drop_out(out)
-
-                # context for next time step
-                context = out
 
                 # input for next time step
                 log_prob = F.log_softmax(self.hidden2vocab(out), dim=1)
