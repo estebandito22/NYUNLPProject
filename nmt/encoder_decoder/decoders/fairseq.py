@@ -39,53 +39,47 @@ class FairseqDecoder(nn.Module):
         self.eos_idx = dict_args["eos_idx"]
         self.model_type = dict_args["model_type"]
         self.tf_ratio = dict_args["tf_ratio"]
+        self.enc_num_directions = 2 if self.attention else 1
+
+        # init recurrent layers
+        if self.model_type == 'gru':
+            self.layers = nn.ModuleList([
+                nn.GRUCell(
+                    input_size=self.enc_hidden_dim * self.enc_num_directions + self.word_embdim if layer == 0 else self.hidden_size,
+                    hidden_size=self.hidden_size,
+                )
+                for layer in range(self.num_layers)
+            ])
+
+        elif self.model_type == 'lstm':
+            self.layers = nn.ModuleList([
+                nn.LSTMCell(
+                    input_size=self.enc_hidden_dim * self.enc_num_directions + self.word_embdim if layer == 0 else self.hidden_size,
+                    hidden_size=self.hidden_size,
+                )
+                for layer in range(self.num_layers)
+            ])
+
+            self.cell_projectors = nn.ModuleList([
+                nn.Linear(self.enc_hidden_dim * self.enc_num_directions, self.hidden_size, bias=False)
+                for layer in range(self.num_layers)
+            ])
+
+        self.hidden_projectors = nn.ModuleList([
+            nn.Linear(self.enc_hidden_dim * self.enc_num_directions, self.hidden_size, bias=False)
+            for layer in range(self.num_layers)
+        ])
 
         # attention
         if self.attention:
-            if self.model_type == 'gru':
-                self.layers = nn.ModuleList([
-                    nn.GRUCell(
-                        input_size=self.enc_hidden_dim * 2 + self.word_embdim if layer == 0 else self.hidden_size,
-                        hidden_size=self.hidden_size,
-                    )
-                    for layer in range(self.num_layers)
-                ])
-
-            elif self.model_type == 'lstm':
-                self.layers = nn.ModuleList([
-                    nn.LSTMCell(
-                        input_size=self.enc_hidden_dim * 2 + self.word_embdim if layer == 0 else self.hidden_size,
-                        hidden_size=self.hidden_size,
-                    )
-                    for layer in range(self.num_layers)
-                ])
-
             dict_args = {'context_size': self.max_sent_len,
                          'context_dim': self.enc_hidden_dim * 2,
                          'hidden_size': self.hidden_size}
             self.attn_layer = AttentionMechanism(dict_args)
 
-        else:
-            if self.model_type == 'gru':
-                self.layers = nn.ModuleList([
-                    nn.GRUCell(
-                        input_size=self.enc_num_layers * self.enc_hidden_dim + self.word_embdim if layer == 0 else self.hidden_size,
-                        hidden_size=self.hidden_size,
-                    )
-                    for layer in range(self.num_layers)
-                ])
-
-            elif self.model_type == 'lstm':
-                self.layers = nn.ModuleList([
-                    nn.LSTMCell(
-                        input_size=self.enc_num_layers * self.enc_hidden_dim + self.word_embdim if layer == 0 else self.hidden_size,
-                        hidden_size=self.hidden_size,
-                    )
-                    for layer in range(self.num_layers)
-                ])
-
         # mlp output
-        self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
+        # self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
+        self.hidden2vocab = nn.Linear(self.enc_hidden_dim * self.enc_num_directions, self.vocab_size)
 
         # target embeddings
         dict_args = {'word_embdim': self.word_embdim,
@@ -105,18 +99,15 @@ class FairseqDecoder(nn.Module):
 
         # init output tensor
         seqlen, batch_size, _ = seq_word_embds.size()
-        # log_probs = torch.zeros([seqlen, batch_size, self.vocab_size])
-        # if torch.cuda.is_available():
-        #     log_probs = log_probs.cuda()
         log_probs = []
 
         # init decoder hidden state
         if self.model_type == 'gru':
-            prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
+            prev_hiddens = [self.hidden_projectors[i](seq_enc_hidden[i]) for i in range(self.num_layers)]
         elif self.model_type == 'lstm':
-            prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
-            prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
-        context = seq_word_embds.data.new(batch_size, self.enc_hidden_dim * 2)
+            prev_hiddens = [self.hidden_projectors[i](seq_enc_hidden[0][i]) for i in range(self.num_layers)]
+            prev_cells = [self.cell_projectors[i](seq_enc_hidden[1][i]) for i in range(self.num_layers)]
+        context = seq_word_embds.data.new(batch_size, self.enc_hidden_dim * self.enc_num_directions)
 
         # init attention scores
         srclen = seq_enc_states.size(0)

@@ -129,8 +129,6 @@ class BidirectionalEncoder(nn.Module):
 
         # resort
         h_n = h_n[:, sorted2orig, :]
-        c_t = c_t[:, sorted2orig, :]
-
         # combine directions num_layers x batch_size x num_directions * hidden_size
         h_n = h_n.view(self.num_layers, 2, batch_size, -1).transpose(1, 2).contiguous().view(self.num_layers, batch_size, -1)
         if self.model_type == 'lstm':

@@ -52,7 +52,7 @@ class FairseqGreedyDecoder(FairseqDecoder):
         elif self.model_type == 'lstm':
             prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
             prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
-        context = seq_enc_states.data.new(batch_size, self.enc_hidden_dim * 2)
+        context = seq_enc_states.data.new(batch_size, self.enc_hidden_dim * self.enc_num_directions)
 
         # init attention scores
         srclen = seq_enc_states.size(0)
