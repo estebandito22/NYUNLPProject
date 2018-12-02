@@ -48,10 +48,11 @@ class FairseqGreedyDecoder(FairseqDecoder):
 
         # init decoder hidden state
         if self.model_type == 'gru':
-            prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
+            prev_hiddens = [self.hidden_projectors[i](seq_enc_hidden[i]) for i in range(self.num_layers)]
+            prev_cells = None
         elif self.model_type == 'lstm':
-            prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
-            prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
+            prev_hiddens = [self.hidden_projectors[i](seq_enc_hidden[0][i]) for i in range(self.num_layers)]
+            prev_cells = [self.cell_projectors[i](seq_enc_hidden[1][i]) for i in range(self.num_layers)]
         context = seq_enc_states.data.new(batch_size, self.enc_hidden_dim * self.enc_num_directions)
 
         # init attention scores
@@ -96,7 +97,7 @@ class FairseqGreedyDecoder(FairseqDecoder):
                 context = out
             else:
                 out = hidden
-                context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(1, -1))
+                context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(batch_size, -1))
             out = self.drop_out(out)
 
             # input for next time step

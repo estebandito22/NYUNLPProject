@@ -121,8 +121,8 @@ class EncDecNMT(nn.Module):
 
         # self.inference_decoder = BeamDecoder(dict_args)
         # self.inference_decoder = GreedyDecoder(dict_args)
-        # self.inference_decoder = FairseqGreedyDecoder(dict_args)
-        self.inference_decoder = FairseqBeamDecoder(dict_args)
+        self.inference_decoder = FairseqGreedyDecoder(dict_args)
+        # self.inference_decoder = FairseqBeamDecoder(dict_args)
 
     def forward(self, source_indexseq, s_lengths,
                 target_indexseq=None, t_lengths=None, inference=False):
@@ -136,12 +136,12 @@ class EncDecNMT(nn.Module):
         source_seq_enc_states, z0 = self.encoder(source_indexseq, s_lengths)
 
         if inference:
-            seq_indexes = self.inference_decoder(
-                source_seq_enc_states, encoder_padding_mask, z0,
-                self.decoder.state_dict(), self.beam_width)
             # seq_indexes = self.inference_decoder(
             #     source_seq_enc_states, encoder_padding_mask, z0,
-            #     self.decoder.state_dict())
+            #     self.decoder.state_dict(), self.beam_width)
+            seq_indexes = self.inference_decoder(
+                source_seq_enc_states, encoder_padding_mask, z0,
+                self.decoder.state_dict())
 
             return seq_indexes
 
