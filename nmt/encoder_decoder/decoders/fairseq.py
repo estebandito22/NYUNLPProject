@@ -60,16 +60,6 @@ class FairseqDecoder(nn.Module):
                 for layer in range(self.num_layers)
             ])
 
-            self.cell_projectors = nn.ModuleList([
-                nn.Linear(self.enc_hidden_dim * self.enc_num_directions, self.hidden_size, bias=False)
-                for layer in range(self.num_layers)
-            ])
-
-        self.hidden_projectors = nn.ModuleList([
-            nn.Linear(self.enc_hidden_dim * self.enc_num_directions, self.hidden_size, bias=False)
-            for layer in range(self.num_layers)
-        ])
-
         # attention
         if self.attention:
             dict_args = {'context_size': self.max_sent_len,
@@ -92,9 +82,14 @@ class FairseqDecoder(nn.Module):
                      'vocab_size': self.vocab_size}
         self.target_word_embd = WordEmbeddings(dict_args)
 
+        # dropout layers
         self.drop = nn.Dropout(p=self.dropout)
         self.drop_in = nn.Dropout(p=self.dropout_in)
         self.drop_out = nn.Dropout(p=self.dropout_out)
+
+        # # register hooks for reporting gradients
+        # self.ih_hooks = [x.weight_ih.register_hook(lambda grad: print("ih_grad", grad)) for x in self.layers]
+        # self.hh_hooks = [x.weight_hh.register_hook(lambda grad: print("hh_grad", grad)) for x in self.layers]
 
     def forward(self, seq_word_indexes, seq_lengths,
                 seq_enc_states, enc_padding_mask, seq_enc_hidden):
@@ -108,10 +103,10 @@ class FairseqDecoder(nn.Module):
 
         # init decoder hidden state
         if self.model_type == 'gru':
-            prev_hiddens = [self.hidden_projectors[i](seq_enc_hidden[i]) for i in range(self.num_layers)]
+            prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
         elif self.model_type == 'lstm':
-            prev_hiddens = [self.hidden_projectors[i](seq_enc_hidden[0][i]) for i in range(self.num_layers)]
-            prev_cells = [self.cell_projectors[i](seq_enc_hidden[1][i]) for i in range(self.num_layers)]
+            prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
+            prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
         context = seq_word_embds.data.new(batch_size, self.enc_hidden_dim * self.enc_num_directions)
 
         # init attention scores
@@ -125,11 +120,10 @@ class FairseqDecoder(nn.Module):
             start_idx = torch.LongTensor(size=[batch_size, 1]).fill_(self.bos_idx)
             if torch.cuda.is_available():
                 start_idx = start_idx.cuda()
-            i_t = self.target_word_embd(start_idx).squeeze()
+            i_t = self.target_word_embd(start_idx).squeeze(0)
             i_t = self.drop_in(i_t)
 
             for j in range(seqlen):
-
                 input = torch.cat([i_t, context], dim=1)
 
                 for i, rnn in enumerate(self.layers):
@@ -160,13 +154,13 @@ class FairseqDecoder(nn.Module):
                 log_prob = F.log_softmax(self.hidden2vocab(out), dim=1)
                 log_probs += [log_prob]
                 seq_index = log_prob.argmax(dim=1).detach() # detach from history as input
-                i_t = self.target_word_embd(seq_index.unsqueeze(1)).squeeze()
+                i_t = self.target_word_embd(seq_index.unsqueeze(1)).squeeze(0)
                 i_t = self.drop_in(i_t)
 
         else:
             for j in range(seqlen):
 
-                i_t = seq_word_embds[j].squeeze()
+                i_t = seq_word_embds[j]
                 i_t = self.drop_in(i_t)
                 input = torch.cat([i_t, context], dim=1)
 

@@ -5,6 +5,8 @@ import multiprocessing
 import copy
 import random
 
+import matplotlib.pyplot as plt
+
 import torch
 from torch import nn
 from torch import optim
@@ -19,6 +21,22 @@ from tqdm import tqdm
 from nmt.nn.trainer import Trainer
 from nmt.encoder_decoder.enc_dec import EncDecNMT
 from nmt.evaluators.sacrebleu import BleuEvaluator
+
+# def plot_grad_flow(named_parameters, color='b'):
+#     ave_grads = []
+#     layers = []
+#     for n, p in named_parameters:
+#         if(p.requires_grad) and ("bias" not in n) and ("inference" not in n):
+#             layers.append(n)
+#             ave_grads.append(p.grad.norm())
+#             plt.plot(ave_grads, alpha=0.3, color=color)
+#             plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
+#             plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+#             plt.xlim(xmin=0, xmax=len(ave_grads))
+#             plt.xlabel("Layers")
+#             plt.ylabel("Gradient Norm")
+#             plt.title("Gradient flow")
+#             plt.grid(True)
 
 
 class EncDec(Trainer):
@@ -70,6 +88,9 @@ class EncDec(Trainer):
 
         assert self.enc_num_layers == self.dec_num_layers, \
             "encoder and deconder must have same number of layers"
+        assert (self.enc_hidden_dim * 2 == self.dec_hidden_dim and self.attention) \
+            or (self.enc_hidden_dim == self.dec_hidden_dim and not self.attention),\
+            "If using attention, dec_hidden_dim must be 2 * enc_hidden_dim, otherwise they must be equal!"
         assert optimize in ['adam', 'sgd'], "optimize must be adam or sgd!"
 
         # Dataset attributes
@@ -189,9 +210,11 @@ class EncDec(Trainer):
             # backward pass
             loss = self.loss_func(log_probs, y)
             loss.backward()
+            # plot_grad_flow(self.model.named_parameters(), 'b')
             if self.clip_grad > 0:
                 nn.utils.clip_grad_norm_(
                     self.model.parameters(), self.clip_grad)
+            # plot_grad_flow(self.model.named_parameters(), 'r')
             self.optimizer.step()
 
             # compute train loss
