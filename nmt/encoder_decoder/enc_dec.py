@@ -67,16 +67,21 @@ class EncDecNMT(nn.Module):
                      'dropout_out': self.dropout_out,
                      'batch_size': self.batch_size,
                      'kernel_size': self.kernel_size,
-                     'model_type': self.model_type}
+                     'model_type': self.model_type,
+                     'attention': self.attention}
 
         if self.attention:
-            self.encoder = BidirectionalEncoder(dict_args)
+            if self.kernel_size > 0:
+                self.encoder = ConvolutionalEncoder(dict_args)
+            else:
+                self.encoder = BidirectionalEncoder(dict_args)
+                self.encoder.init_hidden(self.batch_size)
         else:
-            self.encoder = RecurrentEncoder(dict_args)
-        self.encoder.init_hidden(self.batch_size)
-
-        if self.kernel_size > 0:
-            self.encoder = ConvolutionalEncoder(dict_args)
+            if self.kernel_size > 0:
+                self.encoder = ConvolutionalEncoder(dict_args)
+            else:
+                self.encoder = RecurrentEncoder(dict_args)
+                self.encoder.init_hidden(self.batch_size)
 
         # decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
@@ -95,7 +100,8 @@ class EncDecNMT(nn.Module):
                      'bos_idx': self.bos_idx,
                      'eos_idx': self.eos_idx,
                      'model_type': self.model_type,
-                     'tf_ratio': self.tf_ratio}
+                     'tf_ratio': self.tf_ratio,
+                     'kernel_size': self.kernel_size}
         # self.decoder = RecurrentDecoder(dict_args)
         # self.decoder = RandomTeacherDecoder(dict_args)
         self.decoder = FairseqDecoder(dict_args)
@@ -117,7 +123,8 @@ class EncDecNMT(nn.Module):
                      'bos_idx': self.bos_idx,
                      'eos_idx': self.eos_idx,
                      'model_type': self.model_type,
-                     'tf_ratio': self.tf_ratio}
+                     'tf_ratio': self.tf_ratio,
+                     'kernel_size': self.kernel_size}
 
         # self.inference_decoder = BeamDecoder(dict_args)
         # self.inference_decoder = GreedyDecoder(dict_args)

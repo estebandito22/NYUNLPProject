@@ -39,7 +39,8 @@ class FairseqDecoder(nn.Module):
         self.eos_idx = dict_args["eos_idx"]
         self.model_type = dict_args["model_type"]
         self.tf_ratio = dict_args["tf_ratio"]
-        self.enc_num_directions = 2 if self.attention else 1
+        self.kernel_size = dict_args["kernel_size"]
+        self.enc_num_directions = 2 if self.attention and self.kernel_size == 0 else 1
 
         # init recurrent layers
         if self.model_type == 'gru':

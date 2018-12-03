@@ -1,5 +1,6 @@
 """Class to train encoder decoder neural machine translation network."""
 
+import numpy as np
 import os
 import multiprocessing
 import copy
@@ -87,10 +88,10 @@ class EncDec(Trainer):
         self.reversed_in = None
 
         assert self.enc_num_layers == self.dec_num_layers, \
-            "encoder and deconder must have same number of layers"
-        assert (self.enc_hidden_dim * 2 == self.dec_hidden_dim and self.attention) \
-            or (self.enc_hidden_dim == self.dec_hidden_dim and not self.attention),\
-            "If using attention, dec_hidden_dim must be 2 * enc_hidden_dim, otherwise they must be equal!"
+            "encoder and decoder must have same number of layers"
+        assert (self.enc_hidden_dim * 2 == self.dec_hidden_dim and self.attention and self.kernel_size == 0) \
+            or (self.enc_hidden_dim == self.dec_hidden_dim),\
+            "If using attention and recurrent encoder, dec_hidden_dim must be 2 * enc_hidden_dim, otherwise they must be equal!"
         assert optimize in ['adam', 'sgd'], "optimize must be adam or sgd!"
 
         # Dataset attributes
@@ -305,6 +306,7 @@ class EncDec(Trainer):
                Dropout Inputs: {}\n\
                Dropout Outputs: {}\n\
                Attention: {}\n\
+               Encoder Type: {}\n\
                Beam Width: {}\n\
                Batch Size: {}\n\
                Optimizer: {}\n\
@@ -324,10 +326,11 @@ class EncDec(Trainer):
                    self.enc_num_layers, self.dec_num_layers,
                    self.enc_dropout, self.dec_dropout,
                    self.dropout_in, self.dropout_out,
-                   self.attention, self.beam_width, self.batch_size,
-                   self.optimize, self.lr, self.weight_decay, self.clip_grad,
-                   self.lr_scheduler, self.min_lr, self.model_type,
-                   self.tf_ratio, save_dir), flush=True)
+                   self.attention, 'rnn' if self.kernel_size == 0 else 'conv',
+                   self.beam_width, self.batch_size, self.optimize, self.lr,
+                   self.weight_decay, self.clip_grad, self.lr_scheduler,
+                   self.min_lr, self.model_type, self.tf_ratio,
+                   save_dir), flush=True)
 
         # initialize dataset attributes
         self.model_dir = save_dir
@@ -488,7 +491,7 @@ class EncDec(Trainer):
         """
         if (self.model is not None) and (models_dir is not None):
 
-            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_di_{}_do_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_ls_{}_ml_{}_mt_{}_tf_{}".\
+            model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_di_{}_do_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_ls_{}_ml_{}_mt_{}_tf_{}_et_{}".\
                 format(self.word_embdim, bool(self.word_embeddings),
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.reversed_in, self.enc_hidden_dim,
@@ -498,7 +501,8 @@ class EncDec(Trainer):
                        self.attention, self.beam_width, self.optimize, self.lr,
                        self.weight_decay, self.clip_grad,
                        self.lr_scheduler, self.min_lr,
-                       self.model_type, self.tf_ratio)
+                       self.model_type, self.tf_ratio,
+                       'rnn' if self.kernel_size == 0 else 'conv')
 
             if not os.path.isdir(os.path.join(models_dir, model_dir)):
                 os.makedirs(os.path.join(models_dir, model_dir))
