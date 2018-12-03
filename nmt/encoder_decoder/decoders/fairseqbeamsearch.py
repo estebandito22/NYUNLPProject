@@ -54,6 +54,7 @@ class FairseqBeamDecoder(FairseqDecoder):
         self.bos_idx = dict_args["bos_idx"]
         self.eos_idx = dict_args["eos_idx"]
         self.model_type = dict_args["model_type"]
+        self.kernel_size = dict_args["kernel_size"]
         FairseqDecoder.__init__(self, dict_args)
 
     @staticmethod
@@ -94,12 +95,15 @@ class FairseqBeamDecoder(FairseqDecoder):
                 top_B_beams = []
                 for _ in range(B):
                     # init decoder hidden state
-                    if self.model_type == 'gru':
-                        prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
-                        prev_cells = None
-                    elif self.model_type == 'lstm':
-                        prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
-                        prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
+                    if self.kernel_size == 0:
+                        if self.model_type == 'gru':
+                            prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
+                            prev_cells = None
+                        elif self.model_type == 'lstm':
+                            prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
+                            prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
+                    else:
+                        prev_hiddens, prev_cells = self.init_hidden(seq_enc_hidden)
 
                     # init context
                     context = seq_enc_states.data.new(1, self.enc_hidden_dim * self.enc_num_directions)

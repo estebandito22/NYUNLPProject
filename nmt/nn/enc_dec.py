@@ -87,7 +87,7 @@ class EncDec(Trainer):
         self.max_sent_len = None
         self.reversed_in = None
 
-        assert self.enc_num_layers == self.dec_num_layers, \
+        assert (self.enc_num_layers == self.dec_num_layers or self.kernel_size > 0), \
             "encoder and decoder must have same number of layers"
         assert (self.enc_hidden_dim * 2 == self.dec_hidden_dim and self.attention and self.kernel_size == 0) \
             or (self.enc_hidden_dim == self.dec_hidden_dim),\

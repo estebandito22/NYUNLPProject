@@ -92,6 +92,18 @@ class FairseqDecoder(nn.Module):
         # self.ih_hooks = [x.weight_ih.register_hook(lambda grad: print("ih_grad", grad)) for x in self.layers]
         # self.hh_hooks = [x.weight_hh.register_hook(lambda grad: print("hh_grad", grad)) for x in self.layers]
 
+    def init_hidden(self, seq_enc_hidden):
+        """Initialize the hidden state of the RNN."""
+
+        if self.model_type == 'gru':
+            prev_hiddens = [torch.zeros_like(seq_enc_hidden[i]) for i in range(self.num_layers)]
+            return prev_hiddens, None
+
+        prev_hiddens = [torch.zeros_like(seq_enc_hidden[0][i]) for i in range(self.num_layers)]
+        prev_cells = [torch.zeros_like(seq_enc_hidden[1][i]) for i in range(self.num_layers)]
+
+        return prev_hiddens, prev_cells
+
     def forward(self, seq_word_indexes, seq_lengths,
                 seq_enc_states, enc_padding_mask, seq_enc_hidden):
         """Forward pass."""
@@ -103,11 +115,16 @@ class FairseqDecoder(nn.Module):
         log_probs = []
 
         # init decoder hidden state
-        if self.model_type == 'gru':
-            prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
-        elif self.model_type == 'lstm':
-            prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
-            prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
+        if self.kernel_size == 0:
+            if self.model_type == 'gru':
+                prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
+            elif self.model_type == 'lstm':
+                prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
+                prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
+        else:
+            prev_hiddens, prev_cells = self.init_hidden(seq_enc_hidden)
+
+        # init context
         context = seq_word_embds.data.new(batch_size, self.enc_hidden_dim * self.enc_num_directions)
 
         # init attention scores

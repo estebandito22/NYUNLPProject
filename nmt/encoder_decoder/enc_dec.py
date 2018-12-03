@@ -68,7 +68,9 @@ class EncDecNMT(nn.Module):
                      'batch_size': self.batch_size,
                      'kernel_size': self.kernel_size,
                      'model_type': self.model_type,
-                     'attention': self.attention}
+                     'attention': self.attention,
+                     'pad_idx': self.pad_idx,
+                     'max_sent_len': self.max_sent_len}
 
         if self.attention:
             if self.kernel_size > 0:
