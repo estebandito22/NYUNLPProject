@@ -131,7 +131,7 @@ class ConvolutionalEncoder(nn.Module):
         out = x.permute(2, 0, 1)
 
         # num_layers x batch_size x hidden_size
-        h_n = x.sum(dim=2).unsqueeze(0).expand(self.num_layers, batch_size, -1)
+        h_n = out.sum(dim=0).unsqueeze(0).expand(self.num_layers, batch_size, -1)
         if self.model_type == 'lstm':
             c_n = h_n
             if self.attention:
