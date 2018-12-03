@@ -15,7 +15,6 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
          lr, weight_decay, clip_grad, lr_scheduler, min_lr, reversed_in,
          source_lang, num_epochs, model_type, tf_ratio, save_dir):
 
-
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     train_en = os.path.join(
         inputs_dir, 'iwslt-'+source_lang+'-en', 'train.en')
@@ -51,9 +50,6 @@ def main(word_embdim, pretrained_emb, enc_hidden_dim, dec_hidden_dim,
             r = json.load(f)
             name = file.split('/')[-1]
             data[name] = r
-
-    if kernel_size > 0 and attention:
-        raise ValueError("Attention not implemented with convolutional encoder!")
 
     # max_sent_len = max(
     #     data['max_sent_len.en'], data['max_sent_len.'+source_lang])
