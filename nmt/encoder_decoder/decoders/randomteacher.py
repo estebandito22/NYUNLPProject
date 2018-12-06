@@ -10,18 +10,18 @@ from nmt.encoder_decoder.decoders.bhattention import AttentionMechanism
 from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 
 
-class FairseqDecoder(nn.Module):
+class RandomTeacherDecoder(nn.Module):
 
     """Recurrent Decoder to decode encoded sentence."""
 
     def __init__(self, dict_args):
         """
-        Initialize FairseqDecoder.
+        Initialize RandomTeacherDecoder.
 
         Args
             dict_args: dictionary containing the following keys:
         """
-        super(FairseqDecoder, self).__init__()
+        super(RandomTeacherDecoder, self).__init__()
         self.enc_hidden_dim = dict_args["enc_hidden_dim"]
         self.enc_num_layers = dict_args["enc_num_layers"]
         self.word_embdim = dict_args["word_embdim"]
@@ -46,7 +46,9 @@ class FairseqDecoder(nn.Module):
         if self.model_type == 'gru':
             self.layers = nn.ModuleList([
                 nn.GRUCell(
-                    input_size=self.enc_hidden_dim * self.enc_num_directions + self.word_embdim if layer == 0 else self.hidden_size,
+                    input_size=self.enc_hidden_dim
+                    * self.enc_num_directions
+                    + self.word_embdim if layer == 0 else self.hidden_size,
                     hidden_size=self.hidden_size,
                 )
                 for layer in range(self.num_layers)
@@ -55,7 +57,9 @@ class FairseqDecoder(nn.Module):
         elif self.model_type == 'lstm':
             self.layers = nn.ModuleList([
                 nn.LSTMCell(
-                    input_size=self.enc_hidden_dim * self.enc_num_directions + self.word_embdim if layer == 0 else self.hidden_size,
+                    input_size=self.enc_hidden_dim
+                    * self.enc_num_directions
+                    + self.word_embdim if layer == 0 else self.hidden_size,
                     hidden_size=self.hidden_size,
                 )
                 for layer in range(self.num_layers)
@@ -63,24 +67,28 @@ class FairseqDecoder(nn.Module):
 
         # attention
         if self.attention:
+            nd = self.enc_num_directions
             dict_args = {'context_size': self.max_sent_len,
-                         'context_dim': self.enc_hidden_dim * self.enc_num_directions,
-                         'hidden_size': self.hidden_size}
+                         'context_dim': self.enc_hidden_dim * nd,
+                         'hidden_size': self.hidden_size,
+                         'kernel_size': self.kernel_size}
             self.attn_layer = AttentionMechanism(dict_args)
         else:
-            self.context_proj = nn.Linear(self.enc_hidden_dim * self.enc_num_layers, self.enc_hidden_dim)
+            self.context_proj = nn.Linear(
+                self.enc_hidden_dim * self.enc_num_layers, self.enc_hidden_dim)
 
         # mlp output
-        # self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
         if self.attention:
-            self.hidden2vocab = nn.Linear(self.enc_hidden_dim * self.enc_num_directions , self.vocab_size)
+            self.hidden2vocab = nn.Linear(
+                self.enc_hidden_dim * self.enc_num_directions, self.vocab_size)
         else:
-            self.hidden2vocab = nn.Linear(self.hidden_size , self.vocab_size)
+            self.hidden2vocab = nn.Linear(self.hidden_size, self.vocab_size)
 
         # target embeddings
         dict_args = {'word_embdim': self.word_embdim,
                      'word_embeddings': self.word_embeddings,
-                     'vocab_size': self.vocab_size}
+                     'vocab_size': self.vocab_size,
+                     'kernel_size': self.kernel_size}
         self.target_word_embd = WordEmbeddings(dict_args)
 
         # dropout layers
@@ -92,15 +100,40 @@ class FairseqDecoder(nn.Module):
         # self.ih_hooks = [x.weight_ih.register_hook(lambda grad: print("ih_grad", grad)) for x in self.layers]
         # self.hh_hooks = [x.weight_hh.register_hook(lambda grad: print("hh_grad", grad)) for x in self.layers]
 
+        # initialize hiddens for conv model
+        if self.kernel_size != 0:
+            for layer in self.layers:
+                nn.init.uniform_(layer.weight_ih, -0.05, 0.05)
+                nn.init.uniform_(layer.weight_hh, -0.05, 0.05)
+                nn.init.constant_(layer.bias_ih, 0)
+                nn.init.constant_(layer.bias_hh, 0)
+
     def init_hidden(self, seq_enc_hidden):
         """Initialize the hidden state of the RNN."""
 
-        if self.model_type == 'gru':
-            prev_hiddens = [torch.zeros_like(seq_enc_hidden[i]) for i in range(self.num_layers)]
-            return prev_hiddens, None
+        if self.kernel_size == 0:
+            # hidden state initialization for recurren encoders
+            if self.model_type == 'gru':
+                prev_hiddens = [seq_enc_hidden[i]
+                                for i in range(self.num_layers)]
+                prev_cells = None
+            elif self.model_type == 'lstm':
+                prev_hiddens = [seq_enc_hidden[0][i]
+                                for i in range(self.num_layers)]
+                prev_cells = [seq_enc_hidden[1][i]
+                              for i in range(self.num_layers)]
 
-        prev_hiddens = [torch.zeros_like(seq_enc_hidden[0][i]) for i in range(self.num_layers)]
-        prev_cells = [torch.zeros_like(seq_enc_hidden[1][i]) for i in range(self.num_layers)]
+        else:
+            # hidden state initialization for convolutional encoder
+            if self.model_type == 'gru':
+                prev_hiddens = [torch.zeros_like(seq_enc_hidden)
+                                for _ in range(self.num_layers)]
+                prev_cells = None
+            elif self.model_type == 'lstm':
+                prev_hiddens = [torch.zeros_like(seq_enc_hidden[0])
+                                for _ in range(self.num_layers)]
+                prev_cells = [torch.zeros_like(seq_enc_hidden[1])
+                              for _ in range(self.num_layers)]
 
         return prev_hiddens, prev_cells
 
@@ -115,27 +148,26 @@ class FairseqDecoder(nn.Module):
         log_probs = []
 
         # init decoder hidden state
-        if self.kernel_size == 0:
-            if self.model_type == 'gru':
-                prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
-            elif self.model_type == 'lstm':
-                prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
-                prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
-        else:
-            prev_hiddens, prev_cells = self.init_hidden(seq_enc_hidden)
+        prev_hiddens, prev_cells = self.init_hidden(seq_enc_hidden)
 
         # init context
-        context = seq_word_embds.data.new(batch_size, self.enc_hidden_dim * self.enc_num_directions)
+        context = seq_word_embds.data.new(
+            batch_size, self.enc_hidden_dim * self.enc_num_directions).zero_()
 
         # init attention scores
-        srclen = seq_enc_states.size(0)
-        attn_scores = seq_word_embds.data.new(srclen, seqlen, batch_size).zero_()
+        if self.kernel_size != 0:
+            srclen = seq_enc_states[0].size(0)
+        else:
+            srclen = seq_enc_states.size(0)
+        attn_scores = seq_word_embds.data.new(
+            srclen, seqlen, batch_size).zero_()
 
         use_tf = True if random.random() < self.tf_ratio else False
         if not use_tf:
             # initialize bos for forward decoding
             # batch_size x 1
-            start_idx = torch.LongTensor(size=[batch_size, 1]).fill_(self.bos_idx)
+            start_idx = torch.LongTensor(
+                size=[batch_size, 1]).fill_(self.bos_idx)
             if torch.cuda.is_available():
                 start_idx = start_idx.cuda()
             i_t = self.target_word_embd(start_idx).squeeze(0)
@@ -149,7 +181,8 @@ class FairseqDecoder(nn.Module):
                     if self.model_type == 'gru':
                         hidden = rnn(input, prev_hiddens[i])
                     elif self.model_type == 'lstm':
-                        hidden, cell = rnn(input, (prev_hiddens[i], prev_cells[i]))
+                        hidden, cell = rnn(
+                            input, (prev_hiddens[i], prev_cells[i]))
                     # hidden state becomes the input to the next layer
                     input = self.drop(hidden)
                     # save state for next time step
@@ -161,17 +194,24 @@ class FairseqDecoder(nn.Module):
 
                 # apply attention using the last layer's hidden state
                 if self.attention:
-                    out, attn_scores[:, j, :] = self.attn_layer(hidden, seq_enc_states, enc_padding_mask)
+                    out, attn_scores[:, j, :] = self.attn_layer(
+                        hidden, seq_enc_states, enc_padding_mask)
                     context = out
                 else:
                     out = hidden
-                    context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(batch_size, -1))
+                    if self.kernel_size == 0:
+                        context = self.context_proj(
+                            seq_enc_states.permute(1, 0, 2).contiguous().
+                            view(batch_size, -1))
+                    else:
+                        context = seq_enc_states
                 out = self.drop_out(out)
 
                 # input for next time step
                 log_prob = F.log_softmax(self.hidden2vocab(out), dim=1)
                 log_probs += [log_prob]
-                seq_index = log_prob.argmax(dim=1).detach() # detach from history as input
+                seq_index = log_prob.argmax(dim=1).detach()
+                # detach from history as input
                 i_t = self.target_word_embd(seq_index.unsqueeze(1)).squeeze(0)
                 i_t = self.drop_in(i_t)
 
@@ -187,7 +227,8 @@ class FairseqDecoder(nn.Module):
                     if self.model_type == 'gru':
                         hidden = rnn(input, prev_hiddens[i])
                     elif self.model_type == 'lstm':
-                        hidden, cell = rnn(input, (prev_hiddens[i], prev_cells[i]))
+                        hidden, cell = rnn(
+                            input, (prev_hiddens[i], prev_cells[i]))
                     # hidden state becomes the input to the next layer
                     input = self.drop(hidden)
                     # save state for next time step
@@ -199,16 +240,23 @@ class FairseqDecoder(nn.Module):
 
                 # apply attention using the last layer's hidden state
                 if self.attention:
-                    out, attn_scores[:, j, :] = self.attn_layer(hidden, seq_enc_states, enc_padding_mask)
+                    out, attn_scores[:, j, :] = self.attn_layer(
+                        hidden, seq_enc_states, enc_padding_mask)
                     context = out
                 else:
                     out = hidden
-                    context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(batch_size, -1))
+                    if self.kernel_size == 0:
+                        context = self.context_proj(
+                            seq_enc_states.permute(1, 0, 2).contiguous()
+                            .view(batch_size, -1))
+                    else:
+                        context = seq_enc_states
                 out = self.drop_out(out)
 
                 # input for next time step
                 log_prob = F.log_softmax(self.hidden2vocab(out), dim=1)
-                seq_index = log_prob.argmax(dim=1).detach()  # detach from history as input
+                seq_index = log_prob.argmax(dim=1).detach()
+                # detach from history as input
                 log_probs += [log_prob]
 
         log_probs = torch.stack(log_probs)

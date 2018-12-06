@@ -4,18 +4,13 @@ from torch import nn
 
 from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 
-from nmt.encoder_decoder.encoders.fairseqrecurrent import RecurrentEncoder
-from nmt.encoder_decoder.encoders.fairseqbidirectional import BidirectionalEncoder
+from nmt.encoder_decoder.encoders.recurrent import RecurrentEncoder
+from nmt.encoder_decoder.encoders.bidirectional import BidirectionalEncoder
 from nmt.encoder_decoder.encoders.convolutional import ConvolutionalEncoder
 
-from nmt.encoder_decoder.decoders.recurrent import RecurrentDecoder
 from nmt.encoder_decoder.decoders.randomteacher import RandomTeacherDecoder
-from nmt.encoder_decoder.decoders.fairseq import FairseqDecoder
 from nmt.encoder_decoder.decoders.greedy import GreedyDecoder
-from nmt.encoder_decoder.decoders.fairseqgreedy import FairseqGreedyDecoder
-from nmt.encoder_decoder.decoders.fairseqbeamsearch import FairseqBeamDecoder
 from nmt.encoder_decoder.decoders.beamsearch import BeamDecoder
-# from nmt.encoder_decoder.decoders.beamsearch import BeamDecoder
 
 
 class EncDecNMT(nn.Module):
@@ -104,9 +99,7 @@ class EncDecNMT(nn.Module):
                      'model_type': self.model_type,
                      'tf_ratio': self.tf_ratio,
                      'kernel_size': self.kernel_size}
-        # self.decoder = RecurrentDecoder(dict_args)
-        # self.decoder = RandomTeacherDecoder(dict_args)
-        self.decoder = FairseqDecoder(dict_args)
+        self.decoder = RandomTeacherDecoder(dict_args)
 
         # inference decoder
         dict_args = {'enc_hidden_dim': self.enc_hidden_dim,
@@ -127,11 +120,8 @@ class EncDecNMT(nn.Module):
                      'model_type': self.model_type,
                      'tf_ratio': self.tf_ratio,
                      'kernel_size': self.kernel_size}
-
         # self.inference_decoder = BeamDecoder(dict_args)
-        # self.inference_decoder = GreedyDecoder(dict_args)
-        self.inference_decoder = FairseqGreedyDecoder(dict_args)
-        # self.inference_decoder = FairseqBeamDecoder(dict_args)
+        self.inference_decoder = GreedyDecoder(dict_args)
 
     def forward(self, source_indexseq, s_lengths,
                 target_indexseq=None, t_lengths=None, inference=False):

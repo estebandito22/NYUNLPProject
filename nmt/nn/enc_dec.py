@@ -23,21 +23,21 @@ from nmt.nn.trainer import Trainer
 from nmt.encoder_decoder.enc_dec import EncDecNMT
 from nmt.evaluators.sacrebleu import BleuEvaluator
 
-# def plot_grad_flow(named_parameters, color='b'):
-#     ave_grads = []
-#     layers = []
-#     for n, p in named_parameters:
-#         if(p.requires_grad) and ("bias" not in n) and ("inference" not in n):
-#             layers.append(n)
-#             ave_grads.append(p.grad.norm())
-#             plt.plot(ave_grads, alpha=0.3, color=color)
-#             plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
-#             plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
-#             plt.xlim(xmin=0, xmax=len(ave_grads))
-#             plt.xlabel("Layers")
-#             plt.ylabel("Gradient Norm")
-#             plt.title("Gradient flow")
-#             plt.grid(True)
+def plot_grad_flow(named_parameters, color='b'):
+    ave_grads = []
+    layers = []
+    for n, p in named_parameters:
+        if(p.requires_grad) and ("bias" not in n) and ("inference" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.norm())
+            plt.plot(ave_grads, alpha=0.3, color=color)
+            plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
+            plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+            plt.xlim(xmin=0, xmax=len(ave_grads))
+            plt.xlabel("Layers")
+            plt.ylabel("Gradient Norm")
+            plt.title("Gradient flow")
+            plt.grid(True)
 
 
 class EncDec(Trainer):
@@ -87,11 +87,14 @@ class EncDec(Trainer):
         self.max_sent_len = None
         self.reversed_in = None
 
-        assert (self.enc_num_layers == self.dec_num_layers or self.kernel_size > 0), \
+        assert (self.enc_num_layers == self.dec_num_layers
+                or self.kernel_size > 0), \
             "encoder and decoder must have same number of layers"
-        assert (self.enc_hidden_dim * 2 == self.dec_hidden_dim and self.attention and self.kernel_size == 0) \
+        assert (self.enc_hidden_dim * 2 == self.dec_hidden_dim
+                and self.attention and self.kernel_size == 0) \
             or (self.enc_hidden_dim == self.dec_hidden_dim),\
-            "If using attention and recurrent encoder, dec_hidden_dim must be 2 * enc_hidden_dim, otherwise they must be equal!"
+            "If using attention and recurrent encoder, dec_hidden_dim must be \
+             2 * enc_hidden_dim, otherwise they must be equal!"
         assert optimize in ['adam', 'sgd'], "optimize must be adam or sgd!"
 
         # Dataset attributes
@@ -155,6 +158,11 @@ class EncDec(Trainer):
 
         self.loss_func = nn.NLLLoss(ignore_index=self.pad_idx)
 
+        # param_iterable = [
+        #     {'params': params, 'weight_decay': self.weight_decay}
+        #     if name.find('target') > -1 else {'params': params}
+        #     for name, params in self.model.named_parameters()]
+
         if self.optimize == 'adam':
             self.optimizer = optim.Adam(self.model.parameters(), self.lr,
                                         weight_decay=self.weight_decay)
@@ -211,11 +219,11 @@ class EncDec(Trainer):
             # backward pass
             loss = self.loss_func(log_probs, y)
             loss.backward()
-            # plot_grad_flow(self.model.named_parameters(), 'b')
+            plot_grad_flow(self.model.named_parameters(), 'b')
             if self.clip_grad > 0:
                 nn.utils.clip_grad_norm_(
                     self.model.parameters(), self.clip_grad)
-            # plot_grad_flow(self.model.named_parameters(), 'r')
+            plot_grad_flow(self.model.named_parameters(), 'r')
             self.optimizer.step()
 
             # compute train loss
@@ -277,7 +285,8 @@ class EncDec(Trainer):
                       for idx in y[i].cpu().tolist() if idx != 0][:-1])]
             ref = [' '.join([loader.dataset.X_id2token[idx]
                       for idx in X[i].cpu().tolist() if idx != 0][1:-1])]
-            print("Prediction during eval\nPred: \n{}\nTruth: \n{}\nRef: \n{}".format(pred[0], truth[0], ref[0]))
+            print("Prediction during eval\nPred: \n{}\nTruth: \n{}\nRef: \n{}".
+                  format(pred[0], truth[0], ref[0]))
 
         return samples_processed, eval_loss
 
@@ -492,7 +501,8 @@ class EncDec(Trainer):
         if (self.model is not None) and (models_dir is not None):
 
             model_dir = "ENCDEC_wed_{}_we_{}_evs_{}_dvs_{}_ri_{}_ehd_{}_dhd_{}_enl_{}_dnl_{}_edo_{}_ddo_{}_di_{}_do_{}_at_{}_bw_{}_op_{}_lr_{}_wd_{}_cg_{}_ls_{}_ml_{}_mt_{}_tf_{}_ks_{}".\
-                format(self.word_embdim, bool(self.word_embeddings),
+                format(self.word_embdim,
+                       False if self.word_embeddings[0] is None else True,
                        self.enc_vocab_size, self.dec_vocab_size,
                        self.reversed_in, self.enc_hidden_dim,
                        self.dec_hidden_dim, self.enc_num_layers,

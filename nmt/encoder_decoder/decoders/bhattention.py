@@ -1,5 +1,5 @@
 """PyTorch class to perform attention over context vectors."""
-
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -24,6 +24,7 @@ class AttentionMechanism(nn.Module):
         self.context_size = dict_args['context_size']
         self.context_dim = dict_args['context_dim']
         self.hidden_size = dict_args['hidden_size']
+        self.kernel_size = dict_args['kernel_size']
 
         self.hiddenproj = nn.Linear(
             self.hidden_size, self.context_dim, bias=False)
@@ -36,21 +37,33 @@ class AttentionMechanism(nn.Module):
         # hidden: batch_size x hidden_size
         # padding mask: context_size x batch_size
 
+        # to handle conv encoder attention mechanism
+        if self.kernel_size != 0:
+            contextvects, contextvects_apply = contextvects
+            apply_vects = True
+        else:
+            apply_vects = False
+
         # oupututs: batch_size x context_dim
         hidden_proj = self.hiddenproj(hidden.squeeze(0))
         # outputs: context_size x batch_size
         attn_scores = (contextvects * hidden_proj.unsqueeze(0)).sum(dim=2)
+
         # dont attend over padding
         if padding_mask is not None:
             attn_scores.float().masked_fill_(
                 padding_mask, float('-inf')).type_as(attn_scores)
+
         # normalize attn scores
         # outputs: contet_size x batch_size
         attn_weights = F.softmax(attn_scores, dim=0)
+
+        # to handle conv encoder attention mechanism
+        if apply_vects:
+            contextvects = contextvects_apply
+
         # weighted sum of contextvects
         # outputs: batch_size x context_dim
-        # print(attn_weights.unsqueeze(2).size())
-        # print(contextvects.size())
         c = (attn_weights.unsqueeze(2) * contextvects).sum(dim=0)
         context = torch.tanh(self.outputproj(torch.cat((c, hidden), dim=1)))
 

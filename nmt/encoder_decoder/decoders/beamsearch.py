@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 import numpy as np
 
-from nmt.encoder_decoder.decoders.fairseq import FairseqDecoder
+from nmt.encoder_decoder.decoders.randomteacher import RandomTeacherDecoder
 
 
 class Beam(object):
@@ -27,13 +27,13 @@ class Beam(object):
         return self.log_prob < other.log_prob
 
 
-class FairseqBeamDecoder(FairseqDecoder):
+class BeamDecoder(RandomTeacherDecoder):
 
     """Recurrent Decoder to decode encoded sentence with Beam search."""
 
     def __init__(self, dict_args):
         """
-        Initialize RecurrentDecoder.
+        Initialize BeamDecoder.
 
         Args
             dict_args: dictionary containing the following keys:
@@ -55,7 +55,7 @@ class FairseqBeamDecoder(FairseqDecoder):
         self.eos_idx = dict_args["eos_idx"]
         self.model_type = dict_args["model_type"]
         self.kernel_size = dict_args["kernel_size"]
-        FairseqDecoder.__init__(self, dict_args)
+        RandomTeacherDecoder.__init__(self, dict_args)
 
     @staticmethod
     def _normalize_length(current_length, alpha=0.5):
@@ -95,25 +95,27 @@ class FairseqBeamDecoder(FairseqDecoder):
                 top_B_beams = []
                 for _ in range(B):
                     # init decoder hidden state
-                    if self.kernel_size == 0:
-                        if self.model_type == 'gru':
-                            prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
-                            prev_cells = None
-                        elif self.model_type == 'lstm':
-                            prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
-                            prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
+                    prev_hiddens, prev_cells = self.init_hidden(seq_enc_hidden)
+
+                    # init context and attention scores
+                    if self.kernel_size != 0:
+                        context = seq_enc_states[0].data.new(
+                            1, self.enc_hidden_dim * self.enc_num_directions).\
+                            zero_()
+                        srclen = seq_enc_states[0].size(0)
+                        attn_scores = seq_enc_states[0].data.new(
+                            srclen, self.max_sent_len * 2, 1).zero_()
                     else:
-                        prev_hiddens, prev_cells = self.init_hidden(seq_enc_hidden)
-
-                    # init context
-                    context = seq_enc_states.data.new(1, self.enc_hidden_dim * self.enc_num_directions)
-
-                    # init attention scores
-                    srclen = seq_enc_states.size(0)
-                    attn_scores = seq_enc_states.data.new(srclen, self.max_sent_len * 2, 1).zero_()
+                        context = seq_enc_states.data.new(
+                            1, self.enc_hidden_dim * self.enc_num_directions).\
+                            zero_()
+                        srclen = seq_enc_states.size(0)
+                        attn_scores = seq_enc_states.data.new(
+                            srclen, self.max_sent_len * 2, 1).zero_()
 
                     top_B_beams.append(Beam(float('inf'), [], i_t, context,
-                                            prev_hiddens, prev_cells, attn_scores))
+                                            prev_hiddens, prev_cells,
+                                            attn_scores))
             else:
                 top_B_beams = [beam_nodes.get()[1] for _ in range(B)]
 
@@ -143,7 +145,8 @@ class FairseqBeamDecoder(FairseqDecoder):
                         if self.model_type == 'gru':
                             hidden = rnn(input, prev_hiddens[i])
                         elif self.model_type == 'lstm':
-                            hidden, cell = rnn(input, (prev_hiddens[i], prev_cells[i]))
+                            hidden, cell = rnn(
+                                input, (prev_hiddens[i], prev_cells[i]))
                         # hidden state becomes the input to the next layer
                         input = self.drop(hidden)
                         # save state for next time step
@@ -155,11 +158,17 @@ class FairseqBeamDecoder(FairseqDecoder):
 
                     # apply attention using the last layer's hidden state
                     if self.attention:
-                        out, attn_scores[:, j, :] = self.attn_layer(hidden, seq_enc_states, enc_padding_mask)
+                        out, attn_scores[:, j, :] = self.attn_layer(
+                            hidden, seq_enc_states, enc_padding_mask)
                         context = out
                     else:
                         out = hidden
-                        context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(1, -1))
+                        if self.kernel_size == 0:
+                            context = self.context_proj(
+                                seq_enc_states.permute(1, 0, 2).contiguous().
+                                view(1, -1))
+                        else:
+                            context = seq_enc_states
                     out = self.drop_out(out)
 
                     # Perform beam search
@@ -167,7 +176,8 @@ class FairseqBeamDecoder(FairseqDecoder):
                     top_B = torch.topk(log_probs, B, dim=1)
                     # print(top_B)
                     beam_log_probs_neg, beam_seq_indices = top_B
-                    beam_log_probs = beam_log_probs_neg * -1  # for priority queue
+                    # for priority queue
+                    beam_log_probs = beam_log_probs_neg * -1
 
                     for _b in range(B):
                         beam_log_prob = beam_log_probs.cpu().numpy()[0][_b]
@@ -179,9 +189,11 @@ class FairseqBeamDecoder(FairseqDecoder):
                         new_prev_hiddens = prev_hiddens
                         new_prev_cells = prev_cells
                         new_attn_scores = attn_scores
-                        new_input_t = self.target_word_embd(beam_seq_index.unsqueeze(1)).squeeze(0)
-                        possible_top_beam = Beam(new_log_prob, new_seq, new_input_t, new_context,
-                                                 new_prev_hiddens, new_prev_cells, new_attn_scores)
+                        new_input_t = self.target_word_embd(
+                            beam_seq_index.unsqueeze(1)).squeeze(0)
+                        possible_top_beam = Beam(
+                            new_log_prob, new_seq, new_input_t, new_context,
+                            new_prev_hiddens, new_prev_cells, new_attn_scores)
                         beam_nodes.put( (new_log_prob, possible_top_beam) )
 
             # increment the step in the sequence

@@ -1,22 +1,23 @@
 """PyTorch class for a recurrent network sentence decoder."""
 
 import random
+import numpy as np
 
 import torch
 from torch import nn
 import torch.nn.functional as F
 
-from nmt.encoder_decoder.decoders.fairseq import FairseqDecoder
+from nmt.encoder_decoder.decoders.randomteacher import RandomTeacherDecoder
 from nmt.encoder_decoder.embeddings.wordembedding import WordEmbeddings
 
 
-class FairseqGreedyDecoder(FairseqDecoder):
+class GreedyDecoder(RandomTeacherDecoder):
 
     """Recurrent Decoder to decode encoded sentence."""
 
     def __init__(self, dict_args):
         """
-        Initialize FairseqGreedyDecoder.
+        Initialize GreedyDecoder.
 
         Args
             dict_args: dictionary containing the following keys:
@@ -39,31 +40,39 @@ class FairseqGreedyDecoder(FairseqDecoder):
         self.model_type = dict_args["model_type"]
         self.tf_ratio = dict_args["tf_ratio"]
         self.kernel_size = dict_args["kernel_size"]
-        FairseqDecoder.__init__(self, dict_args)
+        RandomTeacherDecoder.__init__(self, dict_args)
 
     def forward(self, seq_enc_states, enc_padding_mask, seq_enc_hidden,
                 recurrent_decoder_state):
         """Forward pass."""
         self.load_state_dict(recurrent_decoder_state)
-        batch_size = seq_enc_states.size(1)
+
+        if self.kernel_size != 0:
+            if isinstance(seq_enc_states, tuple):
+                batch_size = seq_enc_states[0].size(1)
+            else:
+                batch_size = seq_enc_states.size(0)
+        else:
+            batch_size = seq_enc_states.size(1)
 
         # init decoder hidden state
-        if self.kernel_size == 0:
-            if self.model_type == 'gru':
-                prev_hiddens = [seq_enc_hidden[i] for i in range(self.num_layers)]
-                prev_cells = None
-            elif self.model_type == 'lstm':
-                prev_hiddens = [seq_enc_hidden[0][i] for i in range(self.num_layers)]
-                prev_cells = [seq_enc_hidden[1][i] for i in range(self.num_layers)]
+        prev_hiddens, prev_cells = self.init_hidden(seq_enc_hidden)
+
+        # init context and attention scores
+        if self.kernel_size != 0:
+            context = seq_enc_states[0].data.new(
+                batch_size, self.enc_hidden_dim * self.enc_num_directions).\
+                zero_()
+            srclen = seq_enc_states[0].size(0)
+            attn_scores = seq_enc_states[0].data.new(
+                srclen, self.max_sent_len * 2, batch_size).zero_()
         else:
-            prev_hiddens, prev_cells = self.init_hidden(seq_enc_hidden)
-
-        # init context
-        context = seq_enc_states.data.new(batch_size, self.enc_hidden_dim * self.enc_num_directions)
-
-        # init attention scores
-        srclen = seq_enc_states.size(0)
-        attn_scores = seq_enc_states.data.new(srclen, self.max_sent_len * 2, batch_size).zero_()
+            context = seq_enc_states.data.new(
+                batch_size, self.enc_hidden_dim * self.enc_num_directions).\
+                zero_()
+            srclen = seq_enc_states.size(0)
+            attn_scores = seq_enc_states.data.new(
+                srclen, self.max_sent_len * 2, batch_size).zero_()
 
         # init output tensor
         out_seq_indexes = []
@@ -99,16 +108,23 @@ class FairseqGreedyDecoder(FairseqDecoder):
 
             # apply attention using the last layer's hidden state
             if self.attention:
-                out, attn_scores[:, j, :] = self.attn_layer(hidden, seq_enc_states, enc_padding_mask)
+                out, attn_scores[:, j, :] = self.attn_layer(
+                    hidden, seq_enc_states, enc_padding_mask)
                 context = out
             else:
                 out = hidden
-                context = self.context_proj(seq_enc_states.permute(1, 0, 2).contiguous().view(batch_size, -1))
+                if self.kernel_size == 0:
+                    context = self.context_proj(
+                        seq_enc_states.permute(1, 0, 2).
+                        contiguous().view(batch_size, -1))
+                else:
+                    context = seq_enc_states
             out = self.drop_out(out)
 
             # input for next time step
             log_probs = F.log_softmax(self.hidden2vocab(out), dim=1)
-            seq_index = log_probs.argmax(dim=1).detach() # detach from history as input
+            seq_index = log_probs.argmax(dim=1).detach()
+            # detach from history as input
 
             if seq_index == self.eos_idx:
                 eos = True
