@@ -10,7 +10,7 @@ from nmt.nn.enc_dec import EncDec
 from torch.utils.data import DataLoader
 
 
-def main(model_dir, epoch, source_lang, reversed_in):
+def main(model_dir, epoch, source_lang, reversed_in, beam_width):
 
     inputs_dir = os.path.join(os.getcwd(), 'inputs')
     test_en = os.path.join(
@@ -51,7 +51,7 @@ def main(model_dir, epoch, source_lang, reversed_in):
         val_dataset, batch_size=1, shuffle=False, num_workers=1)
 
     encdec = EncDec()
-    encdec.load(model_dir, epoch)
+    encdec.load(model_dir, epoch, beam_width)
     bleu_tuple = encdec.score(val_score_loader)
     print(bleu_tuple)
 
@@ -66,6 +66,9 @@ if __name__ == '__main__':
                     help="Source langguage of the model 'vi' or 'zh'.")
     ap.add_argument("-re", "--reversed_in", default=False, action='store_true',
                     help="Input direction of the model.")
+    ap.add_argument("-bw", "--beam_width", default=1, type=int,
+                    help="Beam width to set for evaluation.")
 
     args = vars(ap.parse_args())
-    main(args["model_dir"], args["epoch"], args["source_lang"], args["reversed_in"])
+    main(args["model_dir"], args["epoch"], args["source_lang"],
+         args["reversed_in"], args["beam_width"])
