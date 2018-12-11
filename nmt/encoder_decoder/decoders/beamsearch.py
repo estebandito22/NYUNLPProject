@@ -118,8 +118,8 @@ class BeamDecoder(RandomTeacherDecoder):
                                             attn_scores))
             else:
                 top_B_beams = [beam_nodes.get()[1] for _ in range(B)]
-                while not beam_nodes.empty():
-                    beam_nodes.get() # Clear the remainder of the queue
+                with beam_nodes.mutex:
+                    beam_nodes.queue.clear() # Clear the remainder of the queue
 
             eos = True
             for top_beam in top_B_beams:
