@@ -82,6 +82,8 @@ class BeamDecoder(RandomTeacherDecoder):
         start_idx = torch.LongTensor(size=[1, 1]).fill_(self.bos_idx)
         if torch.cuda.is_available():
             start_idx = start_idx.cuda()
+        else:
+            raise TypeError('Do not run without CUDA')
         i_t = self.target_word_embd(start_idx).squeeze(0)
         i_t = self.drop_in(i_t)
 
