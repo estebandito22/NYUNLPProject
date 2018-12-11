@@ -184,7 +184,11 @@ class BeamDecoder(RandomTeacherDecoder):
                         beam_log_prob /= self._normalize_length(j + 1)
                         beam_seq_index = beam_seq_indices[0][_b].unsqueeze(0)
                         new_seq = top_beam.sequence + [beam_seq_index]
-                        new_log_prob = top_beam.log_prob + beam_log_prob
+                        if j == 0:
+                            # Don't take initialized beam probs
+                            new_log_prob = beam_log_prob
+                        else:
+                            new_log_prob = top_beam.log_prob + beam_log_prob
                         new_context = context
                         new_prev_hiddens = prev_hiddens
                         new_prev_cells = prev_cells
