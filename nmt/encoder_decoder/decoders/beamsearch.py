@@ -90,6 +90,7 @@ class BeamDecoder(RandomTeacherDecoder):
         eos = False
         j = 0
         beam_nodes = PriorityQueue()
+        last_best_beam = None
         while eos is False and j < self.max_sent_len * 2:
 
             # init beams if dont exists/get top beams
@@ -120,6 +121,7 @@ class BeamDecoder(RandomTeacherDecoder):
                                             attn_scores))
             else:
                 top_B_beams = [beam_nodes.get()[1] for _ in range(B)]
+                last_best_beam = top_B_beams[0]
                 with beam_nodes.mutex:
                     beam_nodes.queue.clear() # Clear the remainder of the queue
 
@@ -206,9 +208,11 @@ class BeamDecoder(RandomTeacherDecoder):
 
             # increment the step in the sequence
             j += 1
-
         # return the best beam and its attentions
-        best_beam = beam_nodes.get()[1]
+        if beam_nodes.empty():
+            best_beam = last_best_beam
+        else:
+            best_beam = beam_nodes.get()[1]
         out_seq_indexes = best_beam.sequence
         out_seq_attentions = best_beam.attentions
         return out_seq_indexes, out_seq_attentions
