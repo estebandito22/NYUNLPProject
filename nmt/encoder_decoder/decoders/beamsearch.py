@@ -1,5 +1,5 @@
 """PyTorch class for a recurrent network sentence decoder."""
-
+from copy import deepcopy
 from queue import PriorityQueue
 
 import torch
@@ -58,13 +58,11 @@ class BeamDecoder(RandomTeacherDecoder):
         RandomTeacherDecoder.__init__(self, dict_args)
 
     @staticmethod
-    def _normalize_length(current_length, max_sent_len, alpha=0.5):
+    def _normalize_length(current_length, max_sent_len, alpha=0.1):
         # http://opennmt.net/OpenNMT/translation/beam_search/#length-normalization
         num = (5 + np.abs(current_length))**alpha
         den = (6)**alpha
-        #num = (max_sent_len / 2)**alpha
-        #den = ((max_sent_len + 2 ) * 2 - current_length)**alpha
-        return den / num
+        return current_length**alpha
 
     def forward(self, seq_enc_states, enc_padding_mask, seq_enc_hidden,
                 recurrent_decoder_state, B=1):
@@ -126,7 +124,6 @@ class BeamDecoder(RandomTeacherDecoder):
                 with beam_nodes.mutex:
                     beam_nodes.queue.clear() # Clear the remainder of the queue
             eos = True
-            
             for top_beam in top_B_beams:
                 # If all top beams end with <eos> then the search is done.
                 last_idx = top_beam.sequence[-1] if top_beam.sequence else None
@@ -190,26 +187,25 @@ class BeamDecoder(RandomTeacherDecoder):
                     # for priority queue
                     beam_log_probs = beam_log_probs_neg * -1
                     for _b in range(B):
-                        beam_log_prob = beam_log_probs.cpu().numpy()[0][_b]
+                        beam_log_prob = deepcopy(beam_log_probs.cpu().numpy()[0][_b])
                         beam_log_prob /= self._normalize_length(j + 1, self.max_sent_len)
-                        beam_seq_index = beam_seq_indices[0][_b].unsqueeze(0)
+                        beam_seq_index = deepcopy(beam_seq_indices[0][_b].unsqueeze(0))
                         new_seq = top_beam.sequence + [beam_seq_index]
                         if j == 0:
                             # Don't take initialized beam probs
                             new_log_prob = beam_log_prob
                         else:
                             new_log_prob = top_beam.log_prob + beam_log_prob
-                        new_context = context
-                        new_prev_hiddens = prev_hiddens
-                        new_prev_cells = prev_cells
-                        new_attn_scores = attn_scores
+                        new_context = deepcopy(context)
+                        new_prev_hiddens = deepcopy(prev_hiddens)
+                        new_prev_cells = deepcopy(prev_cells)
+                        new_attn_scores = deepcopy(attn_scores)
                         new_input_t = self.target_word_embd(
                             beam_seq_index.unsqueeze(1)).squeeze(0)
                         possible_top_beam = Beam(
                             new_log_prob, new_seq, new_input_t, new_context,
                             new_prev_hiddens, new_prev_cells, new_attn_scores)
                         beam_nodes.put( (new_log_prob, possible_top_beam) )
-
             # increment the step in the sequence
             j += 1
         # return the best beam and its attentions
@@ -217,9 +213,6 @@ class BeamDecoder(RandomTeacherDecoder):
             best_beam = last_best_beam
         else:
             log_prob, best_beam = beam_nodes.get()
-            print(j)
-            print(len(best_beam.sequence))
-            print(log_prob)
         out_seq_indexes = best_beam.sequence
         out_seq_attentions = best_beam.attentions
         return out_seq_indexes, out_seq_attentions
