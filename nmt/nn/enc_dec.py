@@ -23,21 +23,24 @@ from nmt.nn.trainer import Trainer
 from nmt.encoder_decoder.enc_dec import EncDecNMT
 from nmt.evaluators.sacrebleu import BleuEvaluator
 
-def plot_grad_flow(named_parameters, color='b'):
-    ave_grads = []
-    layers = []
-    for n, p in named_parameters:
-        if(p.requires_grad) and ("bias" not in n) and ("inference" not in n):
-            layers.append(n)
-            ave_grads.append(p.grad.norm())
-            plt.plot(ave_grads, alpha=0.3, color=color)
-            plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
-            plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
-            plt.xlim(xmin=0, xmax=len(ave_grads))
-            plt.xlabel("Layers")
-            plt.ylabel("Gradient Norm")
-            plt.title("Gradient flow")
-            plt.grid(True)
+# def plot_grad_flow(named_parameters, color='b'):
+#     grad_norms = []
+#     layers = []
+#
+#     for n, p in named_parameters:
+#         if(p.requires_grad) and ("bias" not in n) and ("inference" not in n):
+#             layers.append(n)
+#             grad_norms.append(p.grad.norm())
+#             plt.plot(grad_norms, alpha=0.3, color=color)
+#             plt.hlines(0, 0, len(grad_norms)+1, linewidth=1, color="k" )
+#             plt.xticks(range(0,len(grad_norms), 1), layers, rotation='vertical')
+#             plt.xlim(xmin=0, xmax=len(grad_norms))
+#             plt.xlabel("Layers")
+#             plt.ylabel("Gradient L2-Norm")
+#             plt.title("Gradient L2-Norm by Layer Before and After Clipping")
+#             plt.grid(True)
+#             plt.tight_layout()
+#             plt.savefig('vi_attn_cnn_gradient_flow.png')
 
 
 class EncDec(Trainer):
@@ -219,11 +222,11 @@ class EncDec(Trainer):
             # backward pass
             loss = self.loss_func(log_probs, y)
             loss.backward()
-            plot_grad_flow(self.model.named_parameters(), 'b')
+            # plot_grad_flow(self.model.named_parameters(), 'b')
             if self.clip_grad > 0:
                 nn.utils.clip_grad_norm_(
                     self.model.parameters(), self.clip_grad)
-            plot_grad_flow(self.model.named_parameters(), 'r')
+            # plot_grad_flow(self.model.named_parameters(), 'r')
             self.optimizer.step()
 
             # compute train loss
@@ -367,6 +370,7 @@ class EncDec(Trainer):
         # init training variables
         train_loss = 0
         samples_processed = 0
+        plt.figure(figsize=(8,8))
 
         # train loop
         training = True
@@ -524,7 +528,7 @@ class EncDec(Trainer):
                 torch.save({'state_dict': self.model.state_dict(),
                             'dcue_dict': attr_dict}, file)
 
-    def load(self, model_dir, epoch):
+    def load(self, model_dir, epoch, beam_width):
         """
         Load a previously trained model.
 
@@ -535,10 +539,20 @@ class EncDec(Trainer):
         epoch_file = "epoch_"+str(epoch)+".pth"
         model_file = os.path.join(model_dir, epoch_file)
         with open(model_file, 'rb') as model_dict:
-            checkpoint = torch.load(model_dict)
+            if torch.cuda.is_available():
+                checkpoint = torch.load(model_dict)
+            else:
+                checkpoint = torch.load(model_dict, map_location='cpu')
 
         for (k, v) in checkpoint['dcue_dict'].items():
             setattr(self, k, v)
+
+        if torch.cuda.is_available():
+                self.USE_CUDA = True
+        else:
+            self.USE_CUDA = False
+
+        self.beam_width = beam_width
 
         self._init_nn()
         self.model.load_state_dict(checkpoint['state_dict'])
