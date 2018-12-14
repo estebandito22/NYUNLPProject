@@ -58,11 +58,13 @@ class BeamDecoder(RandomTeacherDecoder):
         RandomTeacherDecoder.__init__(self, dict_args)
 
     @staticmethod
-    def _normalize_length(current_length, alpha=0.5):
+    def _normalize_length(current_length, max_sent_len, alpha=0.5):
         # http://opennmt.net/OpenNMT/translation/beam_search/#length-normalization
         num = (5 + np.abs(current_length))**alpha
-        den = (5 + 1)**alpha
-        return num / den
+        den = (6)**alpha
+        #num = (max_sent_len / 2)**alpha
+        #den = ((max_sent_len + 2 ) * 2 - current_length)**alpha
+        return den / num
 
     def forward(self, seq_enc_states, enc_padding_mask, seq_enc_hidden,
                 recurrent_decoder_state, B=1):
@@ -82,8 +84,6 @@ class BeamDecoder(RandomTeacherDecoder):
         start_idx = torch.LongTensor(size=[1, 1]).fill_(self.bos_idx)
         if torch.cuda.is_available():
             start_idx = start_idx.cuda()
-        else:
-            raise TypeError('Do not run without CUDA')
         i_t = self.target_word_embd(start_idx).squeeze(0)
         i_t = self.drop_in(i_t)
 
@@ -119,17 +119,23 @@ class BeamDecoder(RandomTeacherDecoder):
                     top_B_beams.append(Beam(float('inf'), [], i_t, context,
                                             prev_hiddens, prev_cells,
                                             attn_scores))
+                    top_B_beams = [top_B_beams[0]]
             else:
                 top_B_beams = [beam_nodes.get()[1] for _ in range(B)]
                 last_best_beam = top_B_beams[0]
                 with beam_nodes.mutex:
                     beam_nodes.queue.clear() # Clear the remainder of the queue
-
             eos = True
+            
             for top_beam in top_B_beams:
                 # If all top beams end with <eos> then the search is done.
                 last_idx = top_beam.sequence[-1] if top_beam.sequence else None
-                if last_idx != self.eos_idx:
+                if last_idx == self.eos_idx:
+                    # Short sentence scenario
+                    beam_log_prob = top_beam.log_prob
+                    #beam_log_prob /= self._normalize_length(j + 1, self.max_sent_len)
+                    beam_nodes.put( (beam_log_prob, top_beam) )
+                else:
                     eos = False
 
                     # get beam hiddens, cells
@@ -180,14 +186,12 @@ class BeamDecoder(RandomTeacherDecoder):
                     # Perform beam search
                     log_probs = F.log_softmax(self.hidden2vocab(out), dim=1)
                     top_B = torch.topk(log_probs, B, dim=1)
-                    # print(top_B)
                     beam_log_probs_neg, beam_seq_indices = top_B
                     # for priority queue
                     beam_log_probs = beam_log_probs_neg * -1
-
                     for _b in range(B):
                         beam_log_prob = beam_log_probs.cpu().numpy()[0][_b]
-                        beam_log_prob /= self._normalize_length(j + 1)
+                        beam_log_prob /= self._normalize_length(j + 1, self.max_sent_len)
                         beam_seq_index = beam_seq_indices[0][_b].unsqueeze(0)
                         new_seq = top_beam.sequence + [beam_seq_index]
                         if j == 0:
@@ -212,7 +216,10 @@ class BeamDecoder(RandomTeacherDecoder):
         if beam_nodes.empty():
             best_beam = last_best_beam
         else:
-            best_beam = beam_nodes.get()[1]
+            log_prob, best_beam = beam_nodes.get()
+            print(j)
+            print(len(best_beam.sequence))
+            print(log_prob)
         out_seq_indexes = best_beam.sequence
         out_seq_attentions = best_beam.attentions
         return out_seq_indexes, out_seq_attentions
