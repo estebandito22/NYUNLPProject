@@ -1,4 +1,8 @@
-"""PyTorch class to perform attention over context vectors."""
+"""
+PyTorch class to perform attention over context vectors.
+Adapted from https://github.com/pytorch/fairseq
+"""
+
 import numpy as np
 import torch
 from torch import nn

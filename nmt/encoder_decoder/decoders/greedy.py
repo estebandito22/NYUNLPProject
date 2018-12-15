@@ -1,4 +1,7 @@
-"""PyTorch class for a recurrent network sentence decoder."""
+"""
+PyTorch class for a recurrent network sentence decoder.
+Inspired by https://github.com/pytorch/fairseq
+"""
 
 import random
 import numpy as np
